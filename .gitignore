@@ -1,2 +1,8 @@
 yolov8x.pt
 venv
+tennis/runs/.DS_Store
+.DS_Store
+
+tennis/models/keypoints_model.pth
+tennis/models/yolo5_last.pt
+
