@@ -129,7 +129,6 @@ class MiniCourt():
 
     def draw_background_rectangle(self,frame):
         shapes = np.zeros_like(frame,np.uint8)
-        
         # Draw the rectangle
         cv2.rectangle(shapes, (self.start_x, self.start_y), (self.end_x, self.end_y), (255, 255, 255), cv2.FILLED)
         out = frame.copy()
@@ -141,30 +140,38 @@ class MiniCourt():
 
     def draw_mini_court(self,frames):
         output_frames = []
-
         for frame in frames:
             frame = self.draw_background_rectangle(frame)
             frame = self.draw_court(frame)
             output_frames.append(frame)
-
         return output_frames
 
     def get_start_point_of_mini_court(self):
         return (self.court_start_x,self.court_start_y)
-    
     def get_width_of_mini_court(self):
         return self.court_drawing_width
-    
     def get_court_drawing_keypoints(self):
         return self.drawing_key_points
 
-    def get_mini_court_coordinates(self, object_position, closest_key_point, closest_key_point_index, player_height_in_pixels, player_height_in_meters):
+    def get_mini_court_coordinates(self,
+                                    object_position,
+                                    closest_key_point, 
+                                    closest_key_point_index, 
+                                    player_height_in_pixels,
+                                    player_height_in_meters
+                                    ):
         
         distance_from_keypoint_x_pixels, distance_from_keypoint_y_pixels = measure_xy_distance(object_position, closest_key_point)
 
         # Conver pixel distance to meters
-        distance_from_keypoint_x_meters = convert_pixel_distance_to_meters(distance_from_keypoint_x_pixels, player_height_in_meters,player_height_in_pixels)
-        distance_from_keypoint_y_meters = convert_pixel_distance_to_meters(distance_from_keypoint_y_pixels,player_height_in_meters,player_height_in_pixels)
+        distance_from_keypoint_x_meters = convert_pixel_distance_to_meters(distance_from_keypoint_x_pixels,
+                                                                            player_height_in_meters,
+                                                                            player_height_in_pixels
+                                                                            )
+        distance_from_keypoint_y_meters = convert_pixel_distance_to_meters(distance_from_keypoint_y_pixels,
+                                                                                player_height_in_meters,
+                                                                                player_height_in_pixels
+                                                                            )
         
         # Convert to mini court coordinates
         mini_court_x_distance_pixels = self.convert_meters_to_pixels(distance_from_keypoint_x_meters)
@@ -174,7 +181,7 @@ class MiniCourt():
                                         )
         
         mini_court_player_position = (closest_mini_coourt_keypoint[0]+mini_court_x_distance_pixels,
-                                    closest_mini_coourt_keypoint[1]+mini_court_y_distance_pixels
+                                        closest_mini_coourt_keypoint[1]+mini_court_y_distance_pixels
                                         )
 
         return  mini_court_player_position
