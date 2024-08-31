@@ -1,1 +1,4 @@
-ultralytics 
+ultralytics
+shutil
+roboflow
+opencv
