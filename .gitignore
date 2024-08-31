@@ -6,3 +6,16 @@ tennis/runs/.DS_Store
 tennis/models/keypoints_model.pth
 tennis/models/yolo5_last.pt
 
+badminton/.env
+badminton/models/court-and-net-detection/best.pt
+badminton/models/court-and-net-detection/new_best.pt
+badminton/models/court-and-net-detection/last.pt
+badminton/models/court-and-net-detection/new_last.pt
+badminton/training/badminton-1
+badminton/training/badminton-shuttlecock-5
+badminton/training/segtest-1
+badminton/models/shuttlecock-detection/yolov5_best.pt
+badminton/models/shuttlecock-detection/yolov5_last.pt
+yolov5_last.pt.DS_Store
+
+
