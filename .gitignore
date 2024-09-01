@@ -19,3 +19,6 @@ badminton/models/shuttlecock-detection/yolov5_last.pt
 yolov5_last.pt.DS_Store
 
 
+tennis/models/player_and_ball_detection/best.pt
+tennis/mini_court/__pycache__/mini_court.cpython-311.pyc
+tennis/models/player_and_ball_detection/last.pt

@@ -17,12 +17,24 @@ def calculate_player_stats(ball_shot_frames, ball_mini_court_detections, player_
         'player_2_last_player_speed': 0,
     }]
 
+    print(f"ball_mini_court_detections: {ball_mini_court_detections}")
+    print(f"ball_shot_frames: {ball_shot_frames}")
+
     for ball_shot_ind in range(len(ball_shot_frames) - 1):
         start_frame = ball_shot_frames[ball_shot_ind]
         end_frame = ball_shot_frames[ball_shot_ind + 1]
+
+        if start_frame >= len(ball_mini_court_detections):
+            print(f"start_frame {start_frame} out of range for ball_mini_court_detections with length {len(ball_mini_court_detections)}")
+            continue
+
         ball_shot_time_in_seconds = (end_frame - start_frame) / 24  # 24fps
 
         # Get distance covered by the ball
+        if 1 not in ball_mini_court_detections[start_frame]:
+            print(f"No ball detected in frame {start_frame}")
+            continue
+        
         distance_covered_by_ball_pixels = measure_distance(ball_mini_court_detections[start_frame][1],
                                                             ball_mini_court_detections[end_frame][1])
         
@@ -41,6 +53,10 @@ def calculate_player_stats(ball_shot_frames, ball_mini_court_detections, player_
 
         # Opponent player speed
         opponent_player_id = 1 if player_shot_ball == 2 else 2
+        
+        if opponent_player_id not in player_mini_court_detections[start_frame] or opponent_player_id not in player_mini_court_detections[end_frame]:
+            print(f"Opponent player ID {opponent_player_id} not found in frames {start_frame} or {end_frame}")
+            continue
         
         distance_covered_by_opponent_pixels = measure_distance(player_mini_court_detections[start_frame][opponent_player_id],
                                                                 player_mini_court_detections[end_frame][opponent_player_id])
