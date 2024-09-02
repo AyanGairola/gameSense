@@ -47,9 +47,9 @@ class UnifiedTracker:
                 
         return detections
 
-    def draw_bboxes(self, video_frames, detections):
+    def draw_bboxes(self, video_frames, detections, interpolated_positions=None):
         output_video_frames = []
-        for frame, detection in zip(video_frames, detections):
+        for i, (frame, detection) in enumerate(zip(video_frames, detections)):
             for det in detection['players']:
                 x1, y1, x2, y2 = det['bbox']
                 cls = det['class']
@@ -58,12 +58,13 @@ class UnifiedTracker:
                 label = 'Player'
                 cv2.putText(frame, f"{label}: {det['confidence']:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
             
-            for det in detection['ball']:
-                x1, y1, x2, y2 = det['bbox']
-                color = (0, 0, 255)  # Red for ball
-                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-                label = 'Ball'
-                cv2.putText(frame, f"{label}: {det['confidence']:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+            if interpolated_positions:
+                prev_pos = interpolated_positions[i-1] if i > 0 else None
+                curr_pos = interpolated_positions[i]
+                if prev_pos and curr_pos and all(prev_pos) and all(curr_pos):
+                    prev_center = (int((prev_pos[0] + prev_pos[2]) // 2), int((prev_pos[1] + prev_pos[3]) // 2))
+                    curr_center = (int((curr_pos[0] + curr_pos[2]) // 2), int((curr_pos[1] + curr_pos[3]) // 2))
+                    cv2.line(frame, prev_center, curr_center, (0, 255, 255), 2)  # Greenish-yellow line for the ball path
             
             output_video_frames.append(frame)
         return output_video_frames
@@ -83,8 +84,8 @@ class UnifiedTracker:
         # Backward fill
         df_ball_positions = df_ball_positions.bfill()
 
-        # Convert DataFrame to list of dictionaries for output
-        interpolated_positions = [{1: pos.tolist()} for pos in df_ball_positions.to_numpy()]
+        # Convert DataFrame to list of positions
+        interpolated_positions = df_ball_positions.to_numpy().tolist()
 
         return interpolated_positions
 
@@ -96,7 +97,7 @@ class UnifiedTracker:
 
     def get_ball_shot_frames(self, interpolated_positions):
         # Extract ball positions ensuring each entry has 4 values
-        ball_positions = [x.get(1, [None, None, None, None]) for x in interpolated_positions]
+        ball_positions = interpolated_positions
 
         # Check if all positions are None or if the list is empty
         if not ball_positions or all(pos == [None, None, None, None] for pos in ball_positions):
