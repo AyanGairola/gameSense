@@ -10,8 +10,7 @@ from player_stats import calculate_player_stats, process_player_stats_data
 from trackers import UnifiedTracker  # Unified tracker is already imported
 import numpy as np
 import pandas as pd
-
-# from kalman_Filter import KalmanFilter
+from rally import RallyDetector
 
 def main():
     # Read Video
@@ -43,7 +42,14 @@ def main():
     # Court Line Detector model
     court_model_path = "models/keypoints_model.pth"
     court_line_detector = CourtLineDetector(court_model_path)
+    
+    # MiniCourt Initialization
+    mini_court = MiniCourt(video_frames[0])
 
+    # RallyDetector Initialization
+    rally_detector = RallyDetector(mini_court)
+    rally_count = 0
+    net_x = None
 
     # Process video frame by frame
     output_video_frames = []
@@ -67,12 +73,31 @@ def main():
         # Detect court keypoints for the current frame
         court_keypoints = court_line_detector.predict(frame)
         court_keypoints_list.append(court_keypoints)
+
+        # Debugging: Print the structure of court_keypoints
+        print(f"Court Keypoints for Frame {i}: {court_keypoints}")
         
+        # Calculate net position (middle of keypoints 0 and 2)
+        if net_x is None:
+            if len(court_keypoints) >= 4:  # Ensure there are enough points
+                net_x = (court_keypoints[0] + court_keypoints[2]) // 2
+
         # Draw court keypoints on the frame
         frame = court_line_detector.draw_keypoints(frame, court_keypoints)
         
         # Draw player and ball detections on the frame
         frame = unified_tracker.draw_bboxes([frame], [detection], interpolated_positions=[interpolated_positions[i]])[0]
+
+        # Update rally count if the ball crosses the net
+        if net_x is not None:
+            ball_position = interpolated_positions[i]
+            if ball_position[0] is not None:  # Ensure ball position is valid
+                if i > 0:
+                    prev_ball_position = interpolated_positions[i-1]
+                    # Check if the ball crossed the net
+                    if (prev_ball_position[0] < net_x and ball_position[0] >= net_x) or \
+                       (prev_ball_position[0] > net_x and ball_position[0] <= net_x):
+                        rally_count += 1
         
         # Draw the ball path (trailing effect)
         if i > 0:
@@ -81,9 +106,10 @@ def main():
             if prev_pos and curr_pos and all(prev_pos) and all(curr_pos):
                 prev_center = (int((prev_pos[0] + prev_pos[2]) // 2), int((prev_pos[1] + prev_pos[3]) // 2))
                 curr_center = (int((curr_pos[0] + curr_pos[2]) // 2), int((curr_pos[1] + curr_pos[3]) // 2))
-                cv2.line(frame, prev_center, curr_center, (0, 255, 255), 2)  # Greenish-yellow line for the ball path
+                cv2.line(frame, prev_center, curr_center, (255, 0, 0), 2)  # Blue line for the ball path
         
-        
+        # Draw rally count on the frame
+        cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         # Calculate player stats
         frame_stats = calculate_player_stats(detection, interpolated_positions[i], i)
         player_stats = pd.concat([player_stats, pd.DataFrame([frame_stats])], ignore_index=True)
