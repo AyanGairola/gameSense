@@ -16,10 +16,13 @@ from utils import (
 
 class MiniCourt():
     def __init__(self,frame):
-        self.drawing_rectangle_width = 250
+        self.drawing_rectangle_width = 250 
         self.drawing_rectangle_height = 500
         self.buffer = 50
         self.padding_court=20
+        self.horizontal_scale_factor = 1
+        self.vertical_scale_factor = 2 # Increased vertical scaling #Hit and Try
+        self.vertical_offset = 20  # Hit and Try
 
         self.video_height, self.video_width = frame.shape[:2]
 
@@ -175,10 +178,26 @@ class MiniCourt():
             self.ball_position = None
 
     def video_to_court_coordinates(self, point):
-        # Convert video coordinates to mini court coordinates
         x, y = point
-        court_x = self.court_start_x + (x / self.video_width) * self.court_drawing_width
-        court_y = self.court_start_y + (y / self.video_height) * (self.court_end_y - self.court_start_y)
+        
+        # Calculate the relative position within the video frame
+        rel_x = x / self.video_width
+        rel_y = y / self.video_height
+        
+        # Apply non-linear transformation to y-coordinate
+        transformed_y = rel_y ** 2.5  # Adjust exponent as needed # Hit and Try
+        
+        # Calculate court coordinates with separate scaling factors
+        court_x = self.court_start_x + rel_x * self.court_drawing_width * self.horizontal_scale_factor
+        court_y = self.court_start_y + transformed_y * (self.court_end_y - self.court_start_y) * self.vertical_scale_factor
+        
+        # Apply vertical offset
+        court_y += self.vertical_offset
+        
+        # Ensure the coordinates don't exceed the court boundaries
+        court_x = min(max(court_x, self.court_start_x), self.court_end_x)
+        court_y = min(max(court_y, self.court_start_y), self.court_end_y)
+        
         return int(court_x), int(court_y)
 
     def draw_players_and_ball(self, frame):

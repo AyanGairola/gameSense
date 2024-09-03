@@ -21,7 +21,7 @@ def main():
     unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
 
     # Detect players and ball using the unified model
-    detections = unified_tracker.detect_frames(video_frames, read_from_stub=False, stub_path="tracker_stubs/unified_detections.pkl")
+    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/unified_detections.pkl")
 
     # Print the type and length of detections
     print("Type of detections:", type(detections))
