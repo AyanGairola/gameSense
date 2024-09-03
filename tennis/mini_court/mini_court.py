@@ -1,29 +1,36 @@
 import cv2
 import numpy as np
-from utils import (
-    convert_pixel_distance_to_meters, get_foot_position, get_center_of_bbox,
-    get_closest_keypoint_index, get_height_of_bbox, measure_xy_distance, convert_meters_to_pixel_distance
-)
+import sys
+sys.path.append('../')
 import constants
-from court_line_detector import CourtLineDetector
-from player_stats import calculate_player_stats, process_player_stats_data
-from trackers import UnifiedTracker
+from utils import (
+    convert_meters_to_pixel_distance,
+    convert_pixel_distance_to_meters,
+    get_foot_position,
+    get_closest_keypoint_index,
+    get_height_of_bbox,
+    measure_xy_distance,
+    get_center_of_bbox,
+    measure_distance
+)
 
-
-class ImprovedMiniCourt():
-    def __init__(self, frame):
+class MiniCourt():
+    def __init__(self,frame):
         self.drawing_rectangle_width = 250
         self.drawing_rectangle_height = 500
         self.buffer = 50
         self.padding_court=20
+
+        self.video_height, self.video_width = frame.shape[:2]
 
         self.set_canvas_background_box_position(frame)
         self.set_mini_court_position()
         self.set_court_drawing_key_points()
         self.set_court_lines()
 
-        # New: Set up perspective transform
-        self.set_perspective_transform()
+        self.player_positions = []
+        self.ball_position = None
+
 
     def convert_meters_to_pixels(self, meters):
         return convert_meters_to_pixel_distance(meters,
@@ -31,7 +38,6 @@ class ImprovedMiniCourt():
                                                 self.court_drawing_width
                                             )
 
-    
     def set_court_drawing_key_points(self):
         drawing_key_points = [0]*28
 
@@ -145,114 +151,58 @@ class ImprovedMiniCourt():
             output_frames.append(frame)
         return output_frames
 
-
-    def get_mini_court_coordinates(self, object_position, closest_key_point, closest_key_point_index, bbox_height):
-        distance_from_keypoint_x_pixels, distance_from_keypoint_y_pixels = measure_xy_distance(object_position, closest_key_point)
-
-        # Convert pixel distance to meters using bbox height as a reference
-        distance_from_keypoint_x_meters = convert_pixel_distance_to_meters(distance_from_keypoint_x_pixels, constants.DOUBLE_LINE_WIDTH, self.court_drawing_width)
-        distance_from_keypoint_y_meters = convert_pixel_distance_to_meters(distance_from_keypoint_y_pixels, constants.DOUBLE_LINE_WIDTH, self.court_drawing_width)
-        
-        # Convert to mini court coordinates
-        mini_court_x_distance_pixels = self.convert_meters_to_pixels(distance_from_keypoint_x_meters)
-        mini_court_y_distance_pixels = self.convert_meters_to_pixels(distance_from_keypoint_y_meters)
-        closest_mini_court_keypoint = (
-            self.drawing_key_points[closest_key_point_index*2],
-            self.drawing_key_points[closest_key_point_index*2+1]
-        )
-        
-        mini_court_player_position = (
-            closest_mini_court_keypoint[0] + mini_court_x_distance_pixels,
-            closest_mini_court_keypoint[1] + mini_court_y_distance_pixels
-        )
-
-        return mini_court_player_position
+    def get_start_point_of_mini_court(self):
+        return (self.court_start_x,self.court_start_y)
+    def get_width_of_mini_court(self):
+        return self.court_drawing_width
+    def get_court_drawing_keypoints(self):
+        return self.drawing_key_points
     
 
-    def convert_to_mini_court_coordinates(self, point):
-        # Convert point to numpy array
-        point = np.array([point[0], point[1], 1], dtype=np.float32)
+    def update_player_positions(self, detections):
+        self.player_positions = []
+        for player in detections.get('players', []):
+            bbox = player['bbox']
+            center = get_center_of_bbox(bbox)
+            court_position = self.video_to_court_coordinates(center)
+            self.player_positions.append(court_position)
 
-        # Apply perspective transform
-        transformed_point = np.dot(self.perspective_matrix, point)
-        transformed_point = transformed_point / transformed_point[2]
+    def update_ball_position(self, interpolated_position):
+        if interpolated_position and all(interpolated_position):
+            center = get_center_of_bbox(interpolated_position)
+            self.ball_position = self.video_to_court_coordinates(center)
+        else:
+            self.ball_position = None
 
-        return (int(transformed_point[0]), int(transformed_point[1]))
-    
+    def video_to_court_coordinates(self, point):
+        # Convert video coordinates to mini court coordinates
+        x, y = point
+        court_x = self.court_start_x + (x / self.video_width) * self.court_drawing_width
+        court_y = self.court_start_y + (y / self.video_height) * (self.court_end_y - self.court_start_y)
+        return int(court_x), int(court_y)
 
-    def set_perspective_transform(self):
-        # Define source points (actual court corners)
-        src_pts = np.float32([
-            self.drawing_key_points[0:2],  # top-left
-            self.drawing_key_points[2:4],  # top-right
-            self.drawing_key_points[4:6],  # bottom-left
-            self.drawing_key_points[6:8]   # bottom-right
-        ])
+    def draw_players_and_ball(self, frame):
+        for position in self.player_positions:
+            cv2.circle(frame, position, 5, (0, 255, 0), -1)  # Green dot for players
 
-        # Define destination points (mini-court corners)
-        dst_pts = np.float32([
-            [self.court_start_x, self.court_start_y],
-            [self.court_end_x, self.court_start_y],
-            [self.court_start_x, self.court_end_y],
-            [self.court_end_x, self.court_end_y]
-        ])
+        if self.ball_position:
+            cv2.circle(frame, self.ball_position, 3, (0, 0, 255), -1)  # Red dot for ball
 
-        # Calculate the perspective transform matrix
-        self.perspective_matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+        return frame
 
-    def convert_detections_to_mini_court_coordinates(self, detections, original_court_key_points):
-        output_player_boxes = []
-        output_ball_boxes = []
+    def draw_mini_court(self, frames, detections, interpolated_positions):
+        output_frames = []
+        for i, frame in enumerate(frames):
+            frame_copy = frame.copy()
+            frame_copy = self.draw_background_rectangle(frame_copy)
+            frame_copy = self.draw_court(frame_copy)
 
-        for detection in detections:
-            players = detection.get('players', [])
-            balls = detection.get('ball', [])
+            # Update player and ball positions
+            self.update_player_positions(detections[i])
+            self.update_ball_position(interpolated_positions[i])
 
-            output_player_bboxes_dict = {}
-            output_ball_bboxes_dict = {}
+            # Draw players and ball
+            frame_copy = self.draw_players_and_ball(frame_copy)
 
-            for player in players:
-                if player['class'] == 1:  # Assuming class 1 is player
-                    bbox = player['bbox']
-                    foot_position = (bbox[0] + bbox[2]) / 2, bbox[3]  # Use bottom center of bbox
-                    mini_court_player_position = self.convert_to_mini_court_coordinates(foot_position)
-                    player_id = player['id']
-                    output_player_bboxes_dict[player_id] = mini_court_player_position
-                    print(f"Player {player_id}: Original position: {foot_position}, Mini court position: {mini_court_player_position}")
-
-            for ball in balls:
-                if ball['class'] == 0:  # Assuming class 0 is ball
-                    bbox = ball['bbox']
-                    ball_position = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2  # Use center of bbox
-                    mini_court_ball_position = self.convert_to_mini_court_coordinates(ball_position)
-                    ball_id = 'ball'
-                    output_ball_bboxes_dict[ball_id] = mini_court_ball_position
-                    print(f"Ball: Original position: {ball_position}, Mini court position: {mini_court_ball_position}")
-
-            output_player_boxes.append(output_player_bboxes_dict)
-            output_ball_boxes.append(output_ball_bboxes_dict)
-
-        return output_player_boxes, output_ball_boxes
-    
-
-    def draw_points_on_mini_court(self, frames, positions, color=(0,255,0)):
-        for frame_num, frame in enumerate(frames):
-            if frame_num < len(positions):
-                for _, position in positions[frame_num].items():
-                    if position:  # Check if position is not None or empty
-                        x, y = position
-                        x = int(x)
-                        y = int(y)
-                        cv2.circle(frame, (x,y), 5, color, -1)
-                        print(f"Drawing point at ({x}, {y}) on frame {frame_num}")
-        return frames
-
-    def convert_to_mini_court_coordinates(self, point):
-        # Convert point to numpy array
-        point = np.array([point[0], point[1], 1], dtype=np.float32)
-
-        # Apply perspective transform
-        transformed_point = np.dot(self.perspective_matrix, point)
-        transformed_point = transformed_point / transformed_point[2]
-
-        return (int(transformed_point[0]), int(transformed_point[1]))
+            output_frames.append(frame_copy)
+        return output_frames

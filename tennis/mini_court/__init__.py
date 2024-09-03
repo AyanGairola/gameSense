@@ -1,1 +1,1 @@
-from .mini_court import ImprovedMiniCourt
+from .mini_court import MiniCourt
