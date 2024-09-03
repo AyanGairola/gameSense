@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 
+from utils import convert_pixel_distance_to_meters
+
 def draw_player_stats(output_video_frames,player_stats):
 
     for index, row in player_stats.iterrows():

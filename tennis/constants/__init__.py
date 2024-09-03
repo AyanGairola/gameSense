@@ -11,3 +11,12 @@ PLAYER_1_HEIGHT_METERS = 1.88
 PLAYER_2_HEIGHT_METERS = 1.91
 
 BALL_DIAMETER_METERS= 0.065
+
+# Average height of a tennis player in meters
+PLAYER_HEIGHT_METERS = 1.85
+
+# Reference height of a player in pixels (this should be set based on your typical video resolution and player size)
+PLAYER_HEIGHT_PIXELS = 200  
+
+# Frames per second of your video
+FPS = 24 

@@ -9,6 +9,7 @@ import cv2
 from player_stats import calculate_player_stats, process_player_stats_data
 from trackers import UnifiedTracker  # Unified tracker is already imported
 import numpy as np
+import pandas as pd
 
 # from kalman_Filter import KalmanFilter
 
@@ -17,7 +18,6 @@ def main():
     input_video_path = "input_vods/vod4.mp4"
     video_frames = read_video(input_video_path)
 
-    
     unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
 
     # Detect players and ball using the unified model
@@ -53,6 +53,15 @@ def main():
     # MiniCourt Initialization
     mini_court = MiniCourt(video_frames[0])
 
+     # Initialize player stats
+    player_stats = pd.DataFrame(columns=[
+        'frame', 'player_1_last_shot_speed', 'player_2_last_shot_speed',
+        'player_1_last_player_speed', 'player_2_last_player_speed',
+        'player_1_average_shot_speed', 'player_2_average_shot_speed',
+        'player_1_average_player_speed', 'player_2_average_player_speed'
+    ])
+
+
     
     for i, (frame, detection) in enumerate(zip(video_frames, detections)):
         # Detect court keypoints for the current frame
@@ -75,12 +84,22 @@ def main():
                 cv2.line(frame, prev_center, curr_center, (0, 255, 255), 2)  # Greenish-yellow line for the ball path
         
         
+        # Calculate player stats
+        frame_stats = calculate_player_stats(detection, interpolated_positions[i], i)
+        player_stats = pd.concat([player_stats, pd.DataFrame([frame_stats])], ignore_index=True)
         
         output_video_frames.append(frame)
+
+    
+    # Process player stats data
+    player_stats = process_player_stats_data(player_stats)
 
     # Draw Mini Court with players and ball for all frames
     output_video_frames = mini_court.draw_mini_court(output_video_frames, detections, interpolated_positions)
 
+
+    # Draw player stats box
+    output_video_frames = draw_player_stats(output_video_frames, player_stats)
 
     # Draw frame number on top left corner of each frame
     for i, frame in enumerate(output_video_frames):
