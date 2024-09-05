@@ -110,6 +110,8 @@ def main():
         
         # Draw rally count on the frame
         cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        
+        
         # Calculate player stats
         frame_stats = calculate_player_stats(detection, interpolated_positions[i], i)
         player_stats = pd.concat([player_stats, pd.DataFrame([frame_stats])], ignore_index=True)

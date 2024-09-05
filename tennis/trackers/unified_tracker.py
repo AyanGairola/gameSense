@@ -140,3 +140,51 @@ class UnifiedTracker:
         frame_nums_with_ball_hits = df_ball_positions[df_ball_positions['ball_hit'] == 1].index.tolist()
 
         return frame_nums_with_ball_hits
+    
+
+    def get_ball_shot_frames_w_o_interpolations(self, ball_positions):
+        # Convert ball positions to a pandas DataFrame
+        df_ball_positions = pd.DataFrame(ball_positions, columns=['x1', 'y1', 'x2', 'y2'])
+
+        # Check if DataFrame is empty
+        if df_ball_positions.empty:
+            print("No valid ball positions found.")
+            return []
+
+        # Initialize 'ball_hit' column and calculate the midpoint y-coordinates
+        df_ball_positions['ball_hit'] = 0
+        df_ball_positions['mid_y'] = (df_ball_positions['y1'] + df_ball_positions['y2']) / 2
+
+        # Rolling mean of mid_y to smooth the data
+        df_ball_positions['mid_y_rolling_mean'] = df_ball_positions['mid_y'].rolling(window=5, min_periods=1).mean()
+
+        # Calculate the change (delta) in mid_y_rolling_mean between consecutive frames
+        df_ball_positions['delta_y'] = df_ball_positions['mid_y_rolling_mean'].diff()
+
+        # Parameters for detecting ball hit
+        minimum_change_frames_for_hit = 25
+
+        # Iterate through frames and detect significant changes in delta_y
+        for i in range(1, len(df_ball_positions) - int(minimum_change_frames_for_hit * 1.2)):
+            negative_position_change = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[i + 1] < 0
+            positive_position_change = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[i + 1] > 0
+
+            if negative_position_change or positive_position_change:
+                change_count = 0
+                for change_frame in range(i + 1, i + int(minimum_change_frames_for_hit * 1.2) + 1):
+                    negative_following = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[change_frame] < 0
+                    positive_following = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[change_frame] > 0
+
+                    if negative_position_change and negative_following:
+                        change_count += 1
+                    elif positive_position_change and positive_following:
+                        change_count += 1
+
+                # Mark frame as ball hit if significant change is detected
+                if change_count > minimum_change_frames_for_hit - 1:
+                    df_ball_positions.loc[i, 'ball_hit'] = 1
+
+        # Extract frames where ball hits are detected
+        frame_nums_with_ball_hits = df_ball_positions[df_ball_positions['ball_hit'] == 1].index.tolist()
+
+        return frame_nums_with_ball_hits
