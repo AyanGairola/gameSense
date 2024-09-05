@@ -22,3 +22,7 @@ yolov5_last.pt.DS_Store
 tennis/models/player_and_ball_detection/best.pt
 tennis/mini_court/__pycache__/mini_court.cpython-311.pyc
 tennis/models/player_and_ball_detection/last.pt
+tennis/shot_recognition/movenet.tflite
+tennis/models/weights.keras
+tennis/models/tennis_rnn_new.h5
+tennis/models/movenet.tflite
