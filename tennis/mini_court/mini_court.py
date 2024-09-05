@@ -21,8 +21,8 @@ class MiniCourt():
         self.buffer = 50
         self.padding_court=20
         self.horizontal_scale_factor = 1
-        self.vertical_scale_factor = 2 # Increased vertical scaling #Hit and Try
-        self.vertical_offset = 20  # Hit and Try
+        self.vertical_scale_factor = 2.2 # Increased vertical scaling #Hit and Try
+        self.vertical_offset = -15  # Hit and Try
 
         self.video_height, self.video_width = frame.shape[:2]
 
@@ -103,18 +103,18 @@ class MiniCourt():
 
     def set_mini_court_position(self):
         self.court_start_x = self.start_x + self.padding_court
-        self.court_start_y = self.start_y + self.padding_court 
+        self.court_start_y = self.start_y + self.padding_court + 20
         self.court_end_x = self.end_x - self.padding_court
-        self.court_end_y = self.end_y - self.padding_court 
+        self.court_end_y = self.end_y - self.padding_court + 20
         self.court_drawing_width = self.court_end_x - self.court_start_x
 
     def set_canvas_background_box_position(self,frame):
         frame= frame.copy()
 
         self.end_x = frame.shape[1] - self.buffer
-        self.end_y = self.buffer + self.drawing_rectangle_height
+        self.end_y = self.buffer + self.drawing_rectangle_height 
         self.start_x = self.end_x - self.drawing_rectangle_width
-        self.start_y = self.end_y - self.drawing_rectangle_height
+        self.start_y = self.end_y - self.drawing_rectangle_height 
 
     def draw_court(self,frame):
         for i in range(0, len(self.drawing_key_points),2):
@@ -194,9 +194,12 @@ class MiniCourt():
         # Apply vertical offset
         court_y += self.vertical_offset
         
-        # Ensure the coordinates don't exceed the court boundaries
-        court_x = min(max(court_x, self.court_start_x), self.court_end_x)
-        court_y = min(max(court_y, self.court_start_y), self.court_end_y)
+        # # Ensure the coordinates don't exceed the court boundaries
+        # court_x = min(max(court_x, self.court_start_x), self.court_end_x)
+        # court_y = min(max(court_y, self.court_start_y), self.court_end_y)
+
+        # court_x = min(max(court_x, self.court_start_x), self.court_end_x)
+        # court_y = min(max(court_y, self.court_start_y), self.court_end_y)
         
         return int(court_x), int(court_y)
 
