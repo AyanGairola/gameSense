@@ -1,4 +1,4 @@
-# shot_detector.py
+
 
 def detect_shot_type(player_position, ball_position, previous_point_ended):
     """

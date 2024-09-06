@@ -81,12 +81,13 @@ def main():
                        (prev_ball_position[0] > net_x and ball_position[0] <= net_x):
                         rally_count += 1
 
-        # Ensure player position exists (updated for 'players' key)
-        if 'players' in detection and detection['players']:
-            player_position = detection['players'][0]['bbox']  # Taking the first player
+        # Ensure player positions exist (updated for 'players' key)
+        if 'players' in detection and len(detection['players']) >= 2:
+            player_1_position = detection['players'][0]['bbox']  # First player
+            player_2_position = detection['players'][1]['bbox']  # Second player
         else:
-            print(f"Warning: No player detected in frame {i}")
-            continue  # Skip this frame if no player is available
+            print(f"Warning: Not enough players detected in frame {i}")
+            continue  # Skip this frame if there are not enough players
 
         # Ensure ball position exists
         ball_position = interpolated_positions[i]
@@ -94,12 +95,15 @@ def main():
             print(f"Warning: Ball position not available for frame {i}")
             continue
         
-        # Detect shot type
-        shot_type = detect_shot_type(player_position, ball_position, previous_point_ended)
-        shot_types.append(shot_type)
+        # Detect shot type for player 1
+        shot_type_player_1 = detect_shot_type(player_1_position, ball_position, previous_point_ended)
+        
+        # Detect shot type for player 2
+        shot_type_player_2 = detect_shot_type(player_2_position, ball_position, previous_point_ended)
 
-        # Display the detected shot type on the screen
-        cv2.putText(frame, shot_type, (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        # Display the detected shot types on the screen
+        cv2.putText(frame, f"Player 1: {shot_type_player_1}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+        cv2.putText(frame, f"Player 2: {shot_type_player_2}", (10, 140), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
 
         # Draw the ball path (trailing effect)
         if i > 0:
