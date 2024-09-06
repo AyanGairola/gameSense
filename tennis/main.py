@@ -11,6 +11,7 @@ from trackers import UnifiedTracker  # Unified tracker is already imported
 import numpy as np
 import pandas as pd
 from rally import RallyDetector
+from shot_detection_app2.shot_detector import detect_shot_type  # Import from shot_detection
 
 def main():
     # Read Video
@@ -22,22 +23,8 @@ def main():
     # Detect players and ball using the unified model
     detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/unified_detections.pkl")
 
-    # Print the type and length of detections
-    print("Type of detections:", type(detections))
-    print("Number of frames with detections:", len(detections))
-    
-    # Print the detections for the first few frames to understand the structure
-    for i in range(min(5, len(detections))):
-        print(f"Detections for frame {i}:")
-        print(detections[i])
-        print("Type of detection data for frame:", type(detections[i]))
-
     # Interpolate ball positions to handle missed detections
     interpolated_positions = unified_tracker.interpolate_ball_positions(detections)
-    
-    # Print the type and structure of interpolated positions
-    print("Type of interpolated_positions:", type(interpolated_positions))
-    print("Sample interpolated positions:", interpolated_positions[:5])
 
     # Court Line Detector model
     court_model_path = "models/keypoints_model.pth"
@@ -54,12 +41,8 @@ def main():
     # Process video frame by frame
     output_video_frames = []
     court_keypoints_list = []
-    # previous_players = {}
-
-    # MiniCourt Initialization
-    mini_court = MiniCourt(video_frames[0])
-
-     # Initialize player stats
+    
+    # Initialize player stats
     player_stats = pd.DataFrame(columns=[
         'frame', 'player_1_last_shot_speed', 'player_2_last_shot_speed',
         'player_1_last_player_speed', 'player_2_last_player_speed',
@@ -67,16 +50,15 @@ def main():
         'player_1_average_player_speed', 'player_2_average_player_speed'
     ])
 
+    # Shot detection variables
+    previous_point_ended = False
+    shot_types = []
 
-    
     for i, (frame, detection) in enumerate(zip(video_frames, detections)):
         # Detect court keypoints for the current frame
         court_keypoints = court_line_detector.predict(frame)
         court_keypoints_list.append(court_keypoints)
 
-        # Debugging: Print the structure of court_keypoints
-        print(f"Court Keypoints for Frame {i}: {court_keypoints}")
-        
         # Calculate net position (middle of keypoints 0 and 2)
         if net_x is None:
             if len(court_keypoints) >= 4:  # Ensure there are enough points
@@ -98,7 +80,27 @@ def main():
                     if (prev_ball_position[0] < net_x and ball_position[0] >= net_x) or \
                        (prev_ball_position[0] > net_x and ball_position[0] <= net_x):
                         rally_count += 1
+
+        # Ensure player position exists (updated for 'players' key)
+        if 'players' in detection and detection['players']:
+            player_position = detection['players'][0]['bbox']  # Taking the first player
+        else:
+            print(f"Warning: No player detected in frame {i}")
+            continue  # Skip this frame if no player is available
+
+        # Ensure ball position exists
+        ball_position = interpolated_positions[i]
+        if ball_position is None:
+            print(f"Warning: Ball position not available for frame {i}")
+            continue
         
+        # Detect shot type
+        shot_type = detect_shot_type(player_position, ball_position, previous_point_ended)
+        shot_types.append(shot_type)
+
+        # Display the detected shot type on the screen
+        cv2.putText(frame, shot_type, (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
         # Draw the ball path (trailing effect)
         if i > 0:
             prev_pos = interpolated_positions[i-1]
@@ -107,10 +109,9 @@ def main():
                 prev_center = (int((prev_pos[0] + prev_pos[2]) // 2), int((prev_pos[1] + prev_pos[3]) // 2))
                 curr_center = (int((curr_pos[0] + curr_pos[2]) // 2), int((curr_pos[1] + curr_pos[3]) // 2))
                 cv2.line(frame, prev_center, curr_center, (255, 0, 0), 2)  # Blue line for the ball path
-        
+
         # Draw rally count on the frame
         cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        
         
         # Calculate player stats
         frame_stats = calculate_player_stats(detection, interpolated_positions[i], i)
@@ -118,13 +119,11 @@ def main():
         
         output_video_frames.append(frame)
 
-    
     # Process player stats data
     player_stats = process_player_stats_data(player_stats)
 
     # Draw Mini Court with players and ball for all frames
     output_video_frames = mini_court.draw_mini_court(output_video_frames, detections, interpolated_positions)
-
 
     # Draw player stats box
     output_video_frames = draw_player_stats(output_video_frames, player_stats)
