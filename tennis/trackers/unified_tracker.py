@@ -150,50 +150,102 @@ class UnifiedTracker:
             return detection['ball'][0]['bbox']
         return [None, None, None, None]  # Return a placeholder if no ball is found
 
-    def get_ball_shot_frames(self, interpolated_positions):
-        ball_positions = interpolated_positions
+    # def get_ball_shot_frames(self, interpolated_positions):
+    #     ball_positions = interpolated_positions
 
-        # Return empty if no valid ball positions are found
-        if not ball_positions or all(pos == [None, None, None, None] for pos in ball_positions):
-            print("No valid ball positions found.")
-            return []
+    #     # Return empty if no valid ball positions are found
+    #     if not ball_positions or all(pos == [None, None, None, None] for pos in ball_positions):
+    #         print("No valid ball positions found.")
+    #         return []
 
-        # Create DataFrame from ball positions
-        df_ball_positions = pd.DataFrame(ball_positions, columns=['x1', 'y1', 'x2', 'y2'])
+    #     # Create DataFrame from ball positions
+    #     df_ball_positions = pd.DataFrame(ball_positions, columns=['x1', 'y1', 'x2', 'y2'])
 
-        if df_ball_positions.empty:
-            print("DataFrame is empty after filtering ball positions.")
-            return []
+    #     if df_ball_positions.empty:
+    #         print("DataFrame is empty after filtering ball positions.")
+    #         return []
 
-        # Detect ball hits based on movement along the y-axis
-        df_ball_positions['ball_hit'] = 0
-        df_ball_positions['mid_y'] = (df_ball_positions['y1'] + df_ball_positions['y2']) / 2
-        df_ball_positions['mid_y_rolling_mean'] = df_ball_positions['mid_y'].rolling(window=5, min_periods=1).mean()
-        df_ball_positions['delta_y'] = df_ball_positions['mid_y_rolling_mean'].diff()
+    #     # Detect ball hits based on movement along the y-axis
+    #     df_ball_positions['ball_hit'] = 0
+    #     df_ball_positions['mid_y'] = (df_ball_positions['y1'] + df_ball_positions['y2']) / 2
+    #     df_ball_positions['mid_y_rolling_mean'] = df_ball_positions['mid_y'].rolling(window=5, min_periods=1).mean()
+    #     df_ball_positions['delta_y'] = df_ball_positions['mid_y_rolling_mean'].diff()
+    #     minimum_change_frames_for_hit = 25
+
+    #     for i in range(1, len(df_ball_positions) - int(minimum_change_frames_for_hit * 1.2)):
+    #         neg_change = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[i + 1] < 0
+    #         pos_change = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[i + 1] > 0
+
+    #         if neg_change or pos_change:
+    #             change_count = 0
+    #             for change_frame in range(i + 1, i + int(minimum_change_frames_for_hit * 1.2) + 1):
+    #                 neg_following = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[change_frame] < 0
+    #                 pos_following = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[change_frame] > 0
+
+    #                 if neg_change and neg_following:
+    #                     change_count += 1
+    #                 elif pos_change and pos_following:
+    #                     change_count += 1
+
+    #             if change_count > minimum_change_frames_for_hit - 1:
+    #                 df_ball_positions.loc[i, 'ball_hit'] = 1
+
+    #     # Return frames with ball hits detected
+    #     frame_nums_with_ball_hits = df_ball_positions[df_ball_positions['ball_hit'] == 1].index.tolist()
+
+    #     return frame_nums_with_ball_hits
+
+    def get_ball_shot_frames(self, detections):
+        ball_positions = []
+        for frame, detection in enumerate(detections):
+            if detection['ball']:
+                x1, y1, x2, y2 = detection['ball'][0]['bbox']
+                ball_positions.append([frame, (x1 + x2) / 2, (y1 + y2) / 2])
+            else:
+                ball_positions.append([frame, None, None])
+
+        df_ball_positions = pd.DataFrame(ball_positions, columns=['frame', 'x', 'y'])
+        df_ball_positions['y'] = df_ball_positions['y'].interpolate()
+        df_ball_positions['y_rolling_mean'] = df_ball_positions['y'].rolling(window=5, min_periods=1, center=True).mean()
+        df_ball_positions['delta_y'] = df_ball_positions['y_rolling_mean'].diff()
+
         minimum_change_frames_for_hit = 25
+        frame_nums_with_ball_hits = []
 
         for i in range(1, len(df_ball_positions) - int(minimum_change_frames_for_hit * 1.2)):
-            neg_change = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[i + 1] < 0
-            pos_change = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[i + 1] > 0
+            negative_position_change = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[i+1] < 0
+            positive_position_change = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[i+1] > 0
 
-            if neg_change or pos_change:
+            if negative_position_change or positive_position_change:
                 change_count = 0
-                for change_frame in range(i + 1, i + int(minimum_change_frames_for_hit * 1.2) + 1):
-                    neg_following = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[change_frame] < 0
-                    pos_following = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[change_frame] > 0
+                for change_frame in range(i+1, i+int(minimum_change_frames_for_hit*1.2)+1):
+                    negative_position_change_following_frame = df_ball_positions['delta_y'].iloc[i] > 0 and df_ball_positions['delta_y'].iloc[change_frame] < 0
+                    positive_position_change_following_frame = df_ball_positions['delta_y'].iloc[i] < 0 and df_ball_positions['delta_y'].iloc[change_frame] > 0
 
-                    if neg_change and neg_following:
+                    if negative_position_change and negative_position_change_following_frame:
                         change_count += 1
-                    elif pos_change and pos_following:
+                    elif positive_position_change and positive_position_change_following_frame:
                         change_count += 1
 
                 if change_count > minimum_change_frames_for_hit - 1:
-                    df_ball_positions.loc[i, 'ball_hit'] = 1
-
-        # Return frames with ball hits detected
-        frame_nums_with_ball_hits = df_ball_positions[df_ball_positions['ball_hit'] == 1].index.tolist()
+                    frame_nums_with_ball_hits.append(df_ball_positions['frame'].iloc[i])
 
         return frame_nums_with_ball_hits
+
+    def display_ball_hits(self, video_frames, detections):
+        ball_hit_frames = self.get_ball_shot_frames(detections)
+        
+        output_video_frames = []
+        for i, (frame, detection) in enumerate(zip(video_frames, detections)):
+            # Your existing drawing code here (if any)
+            
+            # Add ball hit indicator
+            if i in ball_hit_frames:
+                cv2.putText(frame, "BALL HIT", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            
+            output_video_frames.append(frame)
+        
+        return output_video_frames, ball_hit_frames
     
     def get_ball_shot_frames_w_o_interpolations(self, ball_positions):
         """

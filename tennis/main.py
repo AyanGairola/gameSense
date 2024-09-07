@@ -6,7 +6,7 @@ import constants
 from court_line_detector import CourtLineDetector
 from mini_court import MiniCourt
 import cv2
-from player_stats import calculate_player_stats, process_player_stats_data
+from player_stats import calculate_player_stats
 from trackers import UnifiedTracker  # Unified tracker is already imported
 import numpy as np
 import pandas as pd
@@ -15,16 +15,33 @@ from shot_detection_app2.shot_detector import detect_shot_type  # Import from sh
 
 def main():
     # Read Video
-    input_video_path = "input_vods/input_video1.mp4"
+    input_video_path = "input_vods/vod4.mp4"
     video_frames = read_video(input_video_path)
 
     unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
 
     # Detect players and ball using the unified model
-    detections = unified_tracker.detect_frames(video_frames, read_from_stub=False, stub_path="tracker_stubs/input_video1.pkl")
+    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/unified_detections.pkl")
+
+    
+    # Print the type and length of detections
+    print("Type of detections:", type(detections))
+    print("Number of frames with detections:", len(detections))
+    
+    # Print the detections for the first few frames to understand the structure
+    for i in range(min(5, len(detections))):
+        print(f"Detections for frame {i}:")
+        print(detections[i])
+        print("Type of detection data for frame:", type(detections[i]))
 
     # Interpolate ball positions to handle missed detections
     interpolated_positions = unified_tracker.interpolate_ball_positions(detections)
+
+    ball_hit_frames = unified_tracker.get_ball_shot_frames(detections)
+    
+    # Print the type and structure of interpolated positions
+    print("Type of interpolated_positions:", type(interpolated_positions))
+    print("Sample interpolated positions:", interpolated_positions[:5])
 
     # Court Line Detector model
     court_model_path = "models/keypoints_model.pth"
@@ -41,14 +58,11 @@ def main():
     # Process video frame by frame
     output_video_frames = []
     court_keypoints_list = []
+
+    # Initialize variables for player stats
+    ball_mini_court_detections = []
+    player_mini_court_detections = []
     
-    # Initialize player stats
-    player_stats = pd.DataFrame(columns=[
-        'frame', 'player_1_last_shot_speed', 'player_2_last_shot_speed',
-        'player_1_last_player_speed', 'player_2_last_player_speed',
-        'player_1_average_shot_speed', 'player_2_average_shot_speed',
-        'player_1_average_player_speed', 'player_2_average_player_speed'
-    ])
 
     # Shot detection variables
     previous_point_ended = False
@@ -70,7 +84,10 @@ def main():
         # Draw player and ball detections on the frame
         frame = unified_tracker.draw_bboxes([frame], [detection], interpolated_positions=[interpolated_positions[i]])[0]
 
-        # Update rally count if the ball crosses the net
+        if i in ball_hit_frames:
+            cv2.putText(frame, "BALL HIT", (10, 170), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+        # Update rally count if the ball crosses the net 
         if net_x is not None:
             ball_position = interpolated_positions[i]
             if ball_position[0] is not None:  # Ensure ball position is valid
@@ -78,7 +95,7 @@ def main():
                     prev_ball_position = interpolated_positions[i-1]
                     # Check if the ball crossed the net
                     if (prev_ball_position[0] < net_x and ball_position[0] >= net_x) or \
-                       (prev_ball_position[0] > net_x and ball_position[0] <= net_x):
+                        (prev_ball_position[0] > net_x and ball_position[0] <= net_x):
                         rally_count += 1
 
         # Ensure player positions exist (updated for 'players' key)
@@ -117,14 +134,28 @@ def main():
         # Draw rally count on the frame
         cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         
-        # Calculate player stats
-        frame_stats = calculate_player_stats(detection, interpolated_positions[i], i)
-        player_stats = pd.concat([player_stats, pd.DataFrame([frame_stats])], ignore_index=True)
         
+
+        ball_position = interpolated_positions[i]
+        if ball_position and all(ball_position):
+            ball_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(ball_position))
+            ball_mini_court_detections.append(ball_mini_court)
+        else:
+            ball_mini_court_detections.append(None)
+
+        frame_players = {}
+        if 'players' in detection and len(detection['players']) >= 2:
+            for j, player in enumerate(detection['players'][:2], start=1):
+                player_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(player['bbox']))
+                frame_players[j] = player_mini_court
+        player_mini_court_detections.append(frame_players)
+
+
         output_video_frames.append(frame)
 
+
     # Process player stats data
-    player_stats = process_player_stats_data(player_stats)
+    player_stats = calculate_player_stats(ball_hit_frames, ball_mini_court_detections, player_mini_court_detections, mini_court, video_frames)
 
     # Draw Mini Court with players and ball for all frames
     output_video_frames = mini_court.draw_mini_court(output_video_frames, detections, interpolated_positions)
@@ -137,7 +168,7 @@ def main():
         cv2.putText(frame, f"Frame: {i}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Save the processed video
-    save_video(output_video_frames, "./output_vods/op_vd1.mp4")
+    save_video(output_video_frames, "./output_vods/oaaa6.mp4")
 
 if __name__ == "__main__":
     main()
