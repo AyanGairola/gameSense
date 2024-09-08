@@ -1,1 +1,2 @@
 from .court_segmentation import CourtSegmentation
+from .tactical_analysis import TacticalAnalysis
