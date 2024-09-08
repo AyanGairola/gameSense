@@ -35,11 +35,12 @@ def main():
     court_model_path = "models/keypoints_model.pth"
     court_line_detector = CourtLineDetector(court_model_path)
     
-    # Initialize MiniCourt for the aerial view
-    mini_court = MiniCourt(video_frames[0])
-
-    # Get court keypoints from the first frame and initialize Tactical Analysis
     court_keypoints = court_line_detector.predict(video_frames[0])
+    
+    # Initialize MiniCourt for the aerial view
+    mini_court = MiniCourt(video_frames[0], court_keypoints)
+
+    
     tactical_analysis = TacticalAnalysis(court_keypoints)
 
     # Initialize RallyDetector
@@ -80,7 +81,7 @@ def main():
         # Ensure ball position exists and process it
         ball_position = interpolated_positions[i]
         if ball_position:
-            ball_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(ball_position))
+            ball_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(ball_position), court_keypoints)
             ball_mini_court_detections.append(ball_mini_court)
 
             # Update rally count if the ball crosses the net
@@ -120,36 +121,42 @@ def main():
         cv2.putText(frame, f"Player 2 Shot: {shot_type_player_2}", (10, 140), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
 
         # Perform Tactical Analysis for ball and player positions
-        if ball_position:
+        if ball_position and player_1_position and player_2_position:
             player_positions = [player_1_position, player_2_position]
-            if i in ball_hit_frames:  # Check if the ball hit the ground in this frame
+            if i in ball_hit_frames:
                 bounce_position = get_center_of_bbox(ball_position)
-                ball_zone = tactical_analysis.analyze_ball_bounce(bounce_position)  # Use ball bounce for zone
+                ball_zone = tactical_analysis.analyze_ball_bounce(bounce_position)
                 cv2.putText(frame, f"Ball Zone: {ball_zone}", (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Analyze player positions relative to the net
+            # Perform player position analysis
             player_zone_stats = tactical_analysis.analyze_player_positions(player_positions)
-
-            # Display tactical insights on the frame
             cv2.putText(frame, f"Player Zone Stats: {player_zone_stats}", (10, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-        # Display rally count on the frame
-        cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+            # Display rally count on the frame
+            cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         frame_players = {}
         if 'players' in detection and len(detection['players']) >= 2:
             for j, player in enumerate(detection['players'][:2], start=1):
-                player_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(player['bbox']))
+                player_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(player['bbox']), court_keypoints)
                 frame_players[j] = player_mini_court
         player_mini_court_detections.append(frame_players)
 
         output_video_frames.append(frame)
+    
+    
+    # Collect court keypoints for all frames
+    court_keypoints_list = []
+    for frame in video_frames:
+        court_keypoints = court_line_detector.predict(frame)
+        court_keypoints_list.append(court_keypoints)
 
     # Process player stats
     player_stats = calculate_player_stats(ball_hit_frames, ball_mini_court_detections, player_mini_court_detections, mini_court, video_frames)
 
     # Draw Mini Court with players and ball for all frames
-    output_video_frames = mini_court.draw_mini_court(output_video_frames, detections, interpolated_positions)
+    output_video_frames = mini_court.draw_mini_court(output_video_frames, detections, interpolated_positions, court_keypoints_list)
     output_video_frames = draw_player_stats(output_video_frames, player_stats)
 
     # Draw frame number on the top left corner of each frame

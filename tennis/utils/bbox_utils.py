@@ -4,14 +4,16 @@ def get_center_of_bbox(bbox):
     center_y = int((y1 + y2) / 2)
     return (center_x, center_y)
 
-# Measuring Distance based pythogras Theorem
 
-def measure_distance(p1,p2):
-    return ((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)**0.5
+
 
 def get_foot_position(bbox):
     x1, y1, x2, y2 = bbox
     return (int((x1 + x2) / 2), y2)
+
+# Measuring Distance based pythogras Theorem
+def measure_distance(p1,p2):
+    return ((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)**0.5
 
 def get_closest_keypoint_index(point, keypoints, keypoint_indices):
     closest_distance = float('inf')
@@ -35,7 +37,9 @@ def measure_xy_distance(p1,p2):
 
 def get_center_of_bbox(bbox):
     x1, y1, x2, y2 = bbox
-    return (int((x1 + x2) / 2), int((y1 + y2) / 2))
+    center_x = (x1 + x2) / 2
+    center_y = (y1 + y2) / 2
+    return center_x, center_y
 
 
 def get_player_height_from_bbox(bbox):
