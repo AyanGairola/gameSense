@@ -1,0 +1,1 @@
+from commentary_generator.generator import CommentaryGenerator

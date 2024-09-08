@@ -34,6 +34,15 @@ def calculate_player_stats(ball_shot_frames, ball_mini_court_detections, player_
             print(f"Warning: Missing or invalid ball detections at frame {start_frame}")
             continue  # Skip this iteration if ball detections are missing
 
+        # Ensure the end_frame is within bounds
+        if end_frame >= len(player_mini_court_detections) or player_mini_court_detections[end_frame] is None:
+            print(f"Warning: Missing or invalid player detections at frame {end_frame}")
+            continue  # Skip this iteration if player detections are missing
+        
+        if end_frame >= len(ball_mini_court_detections) or ball_mini_court_detections[end_frame] is None:
+            print(f"Warning: Missing or invalid ball detections at frame {end_frame}")
+            continue  # Skip this iteration if ball detections are missing
+
         # Proceed with the calculation if data is valid
         player_positions = player_mini_court_detections[start_frame]
         distance_covered_by_ball_pixels = measure_distance(ball_mini_court_detections[start_frame], ball_mini_court_detections[end_frame])
@@ -74,6 +83,7 @@ def calculate_player_stats(ball_shot_frames, ball_mini_court_detections, player_
 
         player_stats_data.append(current_player_stats)
 
+    # Convert the player stats data to a DataFrame
     player_stats_data_df = pd.DataFrame(player_stats_data)
     frames_df = pd.DataFrame({'frame_num': list(range(len(video_frames)))})
     player_stats_data_df = pd.merge(frames_df, player_stats_data_df, on='frame_num', how='left')

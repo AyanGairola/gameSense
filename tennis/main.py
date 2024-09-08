@@ -9,10 +9,24 @@ import cv2
 from player_stats import calculate_player_stats
 from trackers import UnifiedTracker
 import numpy as np
-import pandas as pd
 from rally import RallyDetector
 from shot_detection_app2.shot_detector import detect_shot_type
 from event_detection import TacticalAnalysis
+from commentary_generator.generator import CommentaryGenerator
+from collections import deque
+
+def add_caption_to_frame(frame, caption):
+    """Adds a caption to the video frame at the bottom."""
+    # Get the height and width of the frame
+    frame_height, frame_width = frame.shape[:2]
+
+    # Set the position to the bottom of the frame
+    text_position = (50, frame_height - 30)  # 50 pixels from the bottom
+
+    # Draw the caption on the frame
+    cv2.putText(frame, caption, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+    return frame
 
 def main():
     # Read Video
@@ -35,29 +49,40 @@ def main():
     court_model_path = "models/keypoints_model.pth"
     court_line_detector = CourtLineDetector(court_model_path)
     
+    # Get court keypoints from the first frame and initialize MiniCourt
     court_keypoints = court_line_detector.predict(video_frames[0])
-    
-    # Initialize MiniCourt for the aerial view
     mini_court = MiniCourt(video_frames[0], court_keypoints)
 
-    
+    # Initialize Tactical Analysis
     tactical_analysis = TacticalAnalysis(court_keypoints)
 
     # Initialize RallyDetector
     rally_detector = RallyDetector(mini_court)
 
+    # Initialize the commentary generator
+    commentary_generator = CommentaryGenerator()
+    all_commentary = []  # Collect all commentaries
+    caption_queue = deque(maxlen=3)
+    MAX_CAPTION_DURATION = 180  # 6 seconds (assuming 30 fps)
+
     output_video_frames = []
     ball_mini_court_detections = []
     player_mini_court_detections = []
+    court_keypoints_list = []  # Collect court keypoints for all frames
 
     previous_point_ended = False
     ball_trail = []
     rally_count = 0
     net_x = None  # Initialize net x-position
 
+    # Variables to track shot types
+    previous_shot_type_player_1 = None
+    previous_shot_type_player_2 = None
+
     for i, (frame, detection) in enumerate(zip(video_frames, detections)):
         # Get court keypoints for the current frame
         court_keypoints = court_line_detector.predict(frame)
+        court_keypoints_list.append(court_keypoints)
         
         # Calculate net position (middle of keypoints 0 and 2)
         if net_x is None:
@@ -82,6 +107,7 @@ def main():
         ball_position = interpolated_positions[i]
         if ball_position:
             ball_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(ball_position), court_keypoints)
+
             ball_mini_court_detections.append(ball_mini_court)
 
             # Update rally count if the ball crosses the net
@@ -116,41 +142,38 @@ def main():
         shot_type_player_1 = detect_shot_type(player_1_position, ball_position, previous_point_ended)
         shot_type_player_2 = detect_shot_type(player_2_position, ball_position, previous_point_ended)
 
-        # Display shot types on the frame
-        cv2.putText(frame, f"Player 1 Shot: {shot_type_player_1}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
-        cv2.putText(frame, f"Player 2 Shot: {shot_type_player_2}", (10, 140), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+        # Generate simplified commentary
+        if previous_shot_type_player_1 != shot_type_player_1 or previous_shot_type_player_2 != shot_type_player_2:
+            commentary = f"Player 1 executes a {shot_type_player_1}, Player 2 executes a {shot_type_player_2}, Rally count: {rally_count}"
+            previous_shot_type_player_1 = shot_type_player_1
+            previous_shot_type_player_2 = shot_type_player_2
 
-        # Perform Tactical Analysis for ball and player positions
-        if ball_position and player_1_position and player_2_position:
-            player_positions = [player_1_position, player_2_position]
-            if i in ball_hit_frames:
-                bounce_position = get_center_of_bbox(ball_position)
-                ball_zone = tactical_analysis.analyze_ball_bounce(bounce_position)
-                cv2.putText(frame, f"Ball Zone: {ball_zone}", (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            
-            # Perform player position analysis
-            player_zone_stats = tactical_analysis.analyze_player_positions(player_positions)
-            cv2.putText(frame, f"Player Zone Stats: {player_zone_stats}", (10, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            if commentary:
+                caption_queue.append([commentary, 0])
+                all_commentary.append(commentary)
 
+        # Add commentary captions to the frame
+        if caption_queue:
+            caption_queue[0][1] += 1  # Increment frame count for current caption
+            frame = add_caption_to_frame(frame, caption_queue[0][0])
 
-            # Display rally count on the frame
-            cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            # Remove caption after the duration has passed
+            if caption_queue[0][1] > MAX_CAPTION_DURATION:
+                caption_queue.popleft()
+
+        # Display rally count on the frame
+        cv2.putText(frame, f"Rally: {rally_count}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         frame_players = {}
         if 'players' in detection and len(detection['players']) >= 2:
             for j, player in enumerate(detection['players'][:2], start=1):
+            
                 player_mini_court = mini_court.video_to_court_coordinates(get_center_of_bbox(player['bbox']), court_keypoints)
+
                 frame_players[j] = player_mini_court
         player_mini_court_detections.append(frame_players)
 
         output_video_frames.append(frame)
-    
-    
-    # Collect court keypoints for all frames
-    court_keypoints_list = []
-    for frame in video_frames:
-        court_keypoints = court_line_detector.predict(frame)
-        court_keypoints_list.append(court_keypoints)
 
     # Process player stats
     player_stats = calculate_player_stats(ball_hit_frames, ball_mini_court_detections, player_mini_court_detections, mini_court, video_frames)
@@ -163,8 +186,8 @@ def main():
     for i, frame in enumerate(output_video_frames):
         cv2.putText(frame, f"Frame: {i}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-    # Save the processed video with tactical analysis
-    save_video(output_video_frames, "./output_vods/pnt2.mp4")
+    # Save the processed video with tactical analysis and commentary
+    save_video(output_video_frames, "./output_vods/pnt2_with_commentary.mp4")
 
 if __name__ == "__main__":
     main()
