@@ -127,22 +127,43 @@ class UnifiedTracker:
         x1, y1, x2, y2 = bbox
         return [(x1 + x2) / 2, (y1 + y2) / 2]
 
-    def interpolate_ball_positions(self, detections):
+    def interpolate_ball_positions(self, detections, max_gap=5):
+        """
+        Interpolates ball positions to handle missing values with a moderate level of robustness.
+        Interpolates for small gaps and forward/backward fills larger gaps.
+        
+        :param detections: List of detection dictionaries, each containing 'ball' and 'players'.
+        :param max_gap: Maximum gap (in frames) to allow for linear interpolation. Larger gaps will be filled.
+        :return: List of interpolated ball positions.
+        """
+        # Extract ball positions
         ball_positions = [self.extract_ball_position(det) for det in detections]
-
-        # Create DataFrame with possible NaN for interpolation
+        
+        # Create DataFrame for interpolation
         df_ball_positions = pd.DataFrame(ball_positions, columns=['x1', 'y1', 'x2', 'y2'])
 
-        # Interpolate missing values
-        df_ball_positions = df_ball_positions.interpolate(method='linear')
+        # Mark rows where no ball was detected
+        df_ball_positions['missing'] = df_ball_positions.isna().any(axis=1)
 
-        # Forward and backward fill missing values
-        df_ball_positions = df_ball_positions.ffill().bfill()
+        # Identify groups of consecutive frames with missing data
+        df_ball_positions['group'] = (~df_ball_positions['missing']).cumsum()
+        gaps = df_ball_positions['group'].value_counts().sort_index()
+
+        # Apply linear interpolation for gaps smaller than the max_gap
+        for group, size in gaps.items():
+            if size <= max_gap:
+                df_ball_positions.loc[df_ball_positions['group'] == group, ['x1', 'y1', 'x2', 'y2']] = \
+                    df_ball_positions.loc[df_ball_positions['group'] == group, ['x1', 'y1', 'x2', 'y2']].interpolate()
+
+        # Forward fill and backward fill for the rest
+        df_ball_positions[['x1', 'y1', 'x2', 'y2']] = df_ball_positions[['x1', 'y1', 'x2', 'y2']].ffill().bfill()
 
         # Convert DataFrame to list of positions
-        interpolated_positions = df_ball_positions.to_numpy().tolist()
+        interpolated_positions = df_ball_positions[['x1', 'y1', 'x2', 'y2']].to_numpy().tolist()
 
         return interpolated_positions
+
+
 
     def extract_ball_position(self, detection):
         if detection['ball']:
