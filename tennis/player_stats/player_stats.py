@@ -1,125 +1,90 @@
-import numpy as np
 import pandas as pd
-from collections import deque
+from utils import measure_distance, convert_pixel_distance_to_meters
+import constants
 
-def calculate_player_stats(detection, ball_position, frame_number, fps=30):
-    player_stats = {
-        'frame': frame_number,
+def calculate_player_stats(ball_shot_frames, ball_mini_court_detections, player_mini_court_detections, mini_court, video_frames):
+    player_stats_data = [{
+        'frame_num': 0,
+        'player_1_number_of_shots': 0,
+        'player_1_total_shot_speed': 0,
         'player_1_last_shot_speed': 0,
+        'player_1_total_distance': 0,
+        'player_1_current_speed': 0,
+        'player_1_average_speed': 0,
+
+        'player_2_number_of_shots': 0,
+        'player_2_total_shot_speed': 0,
         'player_2_last_shot_speed': 0,
-        'player_1_last_player_speed': 0,
-        'player_2_last_player_speed': 0,
-    }
+        'player_2_total_distance': 0,
+        'player_2_current_speed': 0,
+        'player_2_average_speed': 0,
+    }]
+    
+    for ball_shot_ind in range(len(ball_shot_frames) - 1):
+        start_frame = ball_shot_frames[ball_shot_ind]
+        end_frame = ball_shot_frames[ball_shot_ind + 1]
 
-    # Calculate player speeds
-    for i, player in enumerate(detection.get('players', [])[:2], start=1):
-        if player and 'bbox' in player:
-            player_speed = calculate_player_speed(player['bbox'], frame_number, fps)
-            player_stats[f'player_{i}_last_player_speed'] = player_speed
+        ball_shot_time_in_seconds = (end_frame - start_frame) / 24.0
 
-    # Calculate ball speed (potential shot speed)
-    if ball_position and all(ball_position):
-        ball_speed = calculate_ball_speed(ball_position, frame_number, fps)
-        
-        # Assign shot speed to the closest player
-        closest_player = get_closest_player(detection.get('players', []), ball_position)
-        if closest_player is not None:
-            player_stats[f'player_{closest_player}_last_shot_speed'] = ball_speed
+        if (start_frame >= len(player_mini_court_detections) or player_mini_court_detections[start_frame] is None or
+            start_frame >= len(ball_mini_court_detections) or ball_mini_court_detections[start_frame] is None or
+            end_frame >= len(player_mini_court_detections) or player_mini_court_detections[end_frame] is None or
+            end_frame >= len(ball_mini_court_detections) or ball_mini_court_detections[end_frame] is None):
+            print(f"Warning: Missing or invalid detections between frames {start_frame} and {end_frame}")
+            continue
 
-    return player_stats
+        player_positions_start = player_mini_court_detections[start_frame]
+        player_positions_end = player_mini_court_detections[end_frame]
+        ball_start = ball_mini_court_detections[start_frame]
+        ball_end = ball_mini_court_detections[end_frame]
 
-def process_player_stats_data(player_stats_df):
-    # Calculate rolling averages
-    window_size = 30  # 1 second at 30 fps
-    for i in range(1, 3):
-        player_stats_df[f'player_{i}_average_shot_speed'] = player_stats_df[f'player_{i}_last_shot_speed'].rolling(window=window_size, min_periods=1).mean()
-        player_stats_df[f'player_{i}_average_player_speed'] = player_stats_df[f'player_{i}_last_player_speed'].rolling(window=window_size, min_periods=1).mean()
+        distance_covered_by_ball_pixels = measure_distance(ball_start, ball_end)
+        distance_covered_by_ball_meters = convert_pixel_distance_to_meters(
+            distance_covered_by_ball_pixels,
+            constants.DOUBLE_LINE_WIDTH,
+            mini_court.get_width_of_mini_court()
+        )
 
-    # Replace NaN values with 0
-    player_stats_df = player_stats_df.fillna(0)
+        speed_of_ball_shot = distance_covered_by_ball_meters / ball_shot_time_in_seconds * 3.6
 
-    return player_stats_df
+        player_shot_ball = min(player_positions_start.keys(), key=lambda player_id: 
+                                measure_distance(player_positions_start[player_id], ball_start))
 
-# Helper functions
+        current_player_stats = player_stats_data[-1].copy()
+        current_player_stats['frame_num'] = start_frame
 
-def calculate_player_speed(bbox, frame_number, fps):
-    if not hasattr(calculate_player_speed, "positions"):
-        calculate_player_speed.positions = {}
-    
-    player_id = hash(tuple(bbox))  # Use bbox as a unique identifier for each player
-    if player_id not in calculate_player_speed.positions:
-        calculate_player_speed.positions[player_id] = deque(maxlen=5)
-    
-    center = ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
-    calculate_player_speed.positions[player_id].append((frame_number, center))
-    
-    if len(calculate_player_speed.positions[player_id]) < 2:
-        return 0
-    
-    first_frame, first_pos = calculate_player_speed.positions[player_id][0]
-    last_frame, last_pos = calculate_player_speed.positions[player_id][-1]
-    
-    time_diff = (last_frame - first_frame) / fps
-    if time_diff == 0:
-        return 0
-    
-    distance = np.sqrt((last_pos[0] - first_pos[0])**2 + (last_pos[1] - first_pos[1])**2)
-    speed_pixels_per_second = distance / time_diff
-    
-    # Convert to km/h (assuming 1 pixel = 2.54 cm)
-    speed_km_h = (speed_pixels_per_second * 2.54 / 100) * 3.6
-    
-    return min(max(speed_km_h, 0), 35)  # Cap between 0 and 35 km/h
+        for player_id in [1, 2]:
+            if player_id in player_positions_start and player_id in player_positions_end:
+                distance_covered_pixels = measure_distance(player_positions_start[player_id], player_positions_end[player_id])
+                distance_covered_meters = convert_pixel_distance_to_meters(
+                    distance_covered_pixels,
+                    constants.DOUBLE_LINE_WIDTH,
+                    mini_court.get_width_of_mini_court()
+                )
+                player_speed = distance_covered_meters / ball_shot_time_in_seconds * 3.6  # km/h
 
-def calculate_ball_speed(ball_position, frame_number, fps):
-    if not hasattr(calculate_ball_speed, "positions"):
-        calculate_ball_speed.positions = deque(maxlen=3)
-    
-    center = ((ball_position[0] + ball_position[2]) / 2, (ball_position[1] + ball_position[3]) / 2)
-    calculate_ball_speed.positions.append((frame_number, center))
-    
-    if len(calculate_ball_speed.positions) < 2:
-        return 0
-    
-    first_frame, first_pos = calculate_ball_speed.positions[0]
-    last_frame, last_pos = calculate_ball_speed.positions[-1]
-    
-    time_diff = (last_frame - first_frame) / fps
-    if time_diff == 0:
-        return 0
-    
-    distance = np.sqrt((last_pos[0] - first_pos[0])**2 + (last_pos[1] - first_pos[1])**2)
-    speed_pixels_per_second = distance / time_diff
-    
-    # Convert to km/h (assuming 1 pixel = 2.54 cm)
-    speed_km_h = (speed_pixels_per_second * 2.54 / 100) * 3.6
-    
-    return min(max(speed_km_h, 0), 220)  # Cap between 0 and 220 km/h
+                current_player_stats[f'player_{player_id}_total_distance'] += distance_covered_meters
+                current_player_stats[f'player_{player_id}_current_speed'] = player_speed
+                current_player_stats[f'player_{player_id}_average_speed'] = (
+                    (current_player_stats[f'player_{player_id}_average_speed'] * ball_shot_ind + player_speed) / (ball_shot_ind + 1)
+                )
 
-def get_closest_player(players, ball_position):
-    if not players or not ball_position:
-        return None
-    
-    ball_center = ((ball_position[0] + ball_position[2]) / 2, (ball_position[1] + ball_position[3]) / 2)
-    
-    min_distance = float('inf')
-    closest_player = None
-    
-    for i, player in enumerate(players[:2], start=1):
-        if player and 'bbox' in player:
-            player_center = ((player['bbox'][0] + player['bbox'][2]) / 2, (player['bbox'][1] + player['bbox'][3]) / 2)
-            distance = np.sqrt((ball_center[0] - player_center[0])**2 + (ball_center[1] - player_center[1])**2)
-            
-            if distance < min_distance:
-                min_distance = distance
-                closest_player = i
-    
-    return closest_player
+                if player_id == player_shot_ball:
+                    current_player_stats[f'player_{player_id}_number_of_shots'] += 1
+                    current_player_stats[f'player_{player_id}_total_shot_speed'] += speed_of_ball_shot
+                    current_player_stats[f'player_{player_id}_last_shot_speed'] = speed_of_ball_shot
 
-# Debugging function
-def debug_print_stats(frame_number, detection, ball_position, stats):
-    print(f"Frame {frame_number}:")
-    print(f"  Detection: {detection}")
-    print(f"  Ball position: {ball_position}")
-    print(f"  Calculated stats: {stats}")
-    print("---")
+        player_stats_data.append(current_player_stats)
+
+    player_stats_data_df = pd.DataFrame(player_stats_data)
+    frames_df = pd.DataFrame({'frame_num': list(range(len(video_frames)))})
+    player_stats_data_df = pd.merge(frames_df, player_stats_data_df, on='frame_num', how='left')
+    player_stats_data_df = player_stats_data_df.ffill()
+
+    for player_id in [1, 2]:
+        player_stats_data_df[f'player_{player_id}_average_shot_speed'] = (
+            player_stats_data_df[f'player_{player_id}_total_shot_speed'] / 
+            player_stats_data_df[f'player_{player_id}_number_of_shots'].replace(0, 1)
+        )
+
+    return player_stats_data_df
