@@ -27,3 +27,8 @@ tennis/models/weights.keras
 tennis/models/tennis_rnn_new.h5
 tennis/models/movenet.tflite
 tennis/input_vods/big_vod.mp4
+tennis/models/yolov8n-pose.pt
+tennis/models/yolov8x-pose-p6.pt
+tennis/models/yolov8x-pose.pt
+
+runs
