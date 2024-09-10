@@ -30,6 +30,7 @@ class MiniCourt():
         # Set canvas dimensions
         self.video_height, self.video_width = frame.shape[:2]
         self.set_canvas_background_box_position(frame)
+        self.court_keypoints = court_keypoints
 
         # Court lines based on keypoints
         self.set_court_lines(court_keypoints)
@@ -150,9 +151,13 @@ class MiniCourt():
 
         # Define lines based on the scaled mini court keypoints
         lines_to_draw = [
-            (0, 1),  # Top baseline
+            (0, 4),  # Top baseline
+            (4,6),   # Top baseline
+            (6,1),   # Top baseline
             (4, 5),  # Service line
-            (2, 3),  # Bottom baseline
+            (2, 5),  # Bottom baseline
+            (5, 7),  # Bottom baseline
+            (7, 3),  # Bottom baseline
             (8, 9),  # Left doubles alley
             (10, 11),  # Right doubles alley
             (6, 7),  # Center service line
@@ -204,4 +209,27 @@ class MiniCourt():
     
     def get_width_of_mini_court(self):
         return self.drawing_rectangle_width
+    
+    def get_net_position(self):
+        """Get the x-coordinate of the net as drawn on the mini court."""
+        # Use the same keypoints that are used to draw the net on the mini court
+        mini_court_keypoints = self.court_keypoints
+
+        # Calculate the midpoint between keypoints 8 and 10 for one side of the net
+        midpoint_0_2 = (
+            (mini_court_keypoints[8] + mini_court_keypoints[10]) // 2,  # X-coordinates
+            (mini_court_keypoints[9] + mini_court_keypoints[11]) // 2   # Y-coordinates
+        )
+
+        # Calculate the midpoint between keypoints 9 and 11 for the other side of the net
+        midpoint_1_3 = (
+            (mini_court_keypoints[12] + mini_court_keypoints[14]) // 2,  # X-coordinates
+            (mini_court_keypoints[13] + mini_court_keypoints[15]) // 2   # Y-coordinates
+        )
+
+        # The net's x-coordinate would be the average of these two midpoints
+        net_x = (midpoint_0_2[0] + midpoint_1_3[0]) // 2
+
+        return net_x
+
 
