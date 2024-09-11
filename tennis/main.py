@@ -14,6 +14,7 @@ from shot_detection_app2.shot_detector import detect_shot_type
 from event_detection import EventScoreTracker
 from gemini_commentary import CommentaryGenerator
 from collections import deque
+import argparse
 
 import cv2
 
@@ -68,8 +69,14 @@ def estimate_missing_player_position(player_positions_history, player_index, fal
 
 
 def main():
-    # Read Video
-    input_video_path = "input_vods/input_video1.mp4"
+
+    parser = argparse.ArgumentParser(description='Process video for player and ball detection.')
+    parser.add_argument('input_video_path', type=str, help='Path to the input video file')
+
+    # Parse arguments
+    args = parser.parse_args()
+    input_video_path = args.input_video_path
+
     video_frames = read_video(input_video_path)
 
     # Initialize the UnifiedTracker for detecting players and ball
@@ -358,7 +365,7 @@ def main():
         cv2.putText(frame, f"Frame: {i}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Save the processed video with tactical analysis and commentary
-    save_video(output_video_frames, "./output_vods/op_vd1.mp4")
+    save_video(output_video_frames, "./output_vods/output_video.mp4")
 
 if __name__ == "__main__":
     main()

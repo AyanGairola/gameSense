@@ -2,3 +2,12 @@ ultralytics
 shutil
 roboflow
 opencv
+torch
+torchvision
+numpy
+scipy
+google.generativeai
+pandas
+argparse
+pathlib
+pickle
