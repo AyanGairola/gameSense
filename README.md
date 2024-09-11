@@ -126,8 +126,20 @@ Implement real-time object detection and tracking algorithms for player and ball
 ### Commentary Generation
 Integrate event-based dynamic generative ( Google Gemini) commentary engine that generates contextual insights based on in-game events.
 
+
 ### Mini Court Generation
 Developed a Mini court based on actual court for better visualisations and calculations. 
 
 ### Player Stats
 Generated player stats based on movement and ball shots. 
+
+## Outputs
+You can check out output videos in the output_videos folder
+
+Some of the screenshots are
+<img width="1512" alt="Screenshot 2024-09-12 at 3 01 44 AM" src="https://github.com/user-attachments/assets/ad35132a-5d89-413b-a993-96d105ccf42e">
+
+<img width="1512" alt="Screenshot 2024-09-12 at 3 00 54 AM" src="https://github.com/user-attachments/assets/74713c4f-f99e-4c8a-ac9f-3499b8dd63a2">
+
+
+
