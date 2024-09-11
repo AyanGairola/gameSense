@@ -118,10 +118,11 @@ Output Video can be found out in output_vods direcotry
 ## Project Overview: Development of an ML-powered system for real-time analysis of tennis matches.
 
 ### Player and Ball Tracking 
-Implement real-time object detection and tracking algorithms for player and ball localization using computer vision, custom pretrained yolo models and roboflow datasets. 
+Trained a yolov5 model on the dataset available at roboflow(https://universe.roboflow.com/jasiu-wachowiak-kqpcy/tennis-iu371). To make the ball tracking more robust we use interpolation for the points in which the ball has not been detected
+We estimate the player’s position based on historical data or fallback to a default position if necessary. This ensures that the system can still function even when positional data is incomplete for some frames. 
 
  ### Court Detection and Event Analysis
- Used pretraied ResNet50 model for court detection , applied homography transformations for court boundary refinement and applied event detection techniques to detects in game events like ball hit and type of shots. 
+ We use a pretrained resnet50 model available on the internet that returns the x,y postion of 14 keypoints across the court in a list, applied homography transformations for court boundary refinement and applied event detection techniques to detects in game events like ball hit and type of shots. 
 
 ### Commentary Generation
 Integrate event-based dynamic generative ( Google Gemini) commentary engine that generates contextual insights based on in-game events.
@@ -140,6 +141,36 @@ Some of the screenshots are
 <img width="1512" alt="Screenshot 2024-09-12 at 3 01 44 AM" src="https://github.com/user-attachments/assets/ad35132a-5d89-413b-a993-96d105ccf42e">
 
 <img width="1512" alt="Screenshot 2024-09-12 at 3 00 54 AM" src="https://github.com/user-attachments/assets/74713c4f-f99e-4c8a-ac9f-3499b8dd63a2">
+
+
+
+## Known Issues
+
+### Lack of Labelled Data 
+
+Lack of appropriate labelled data
+
+### Clay Court
+
+The pretrained court detection model does not work well with clay courts
+
+### Undertrained and Computationally Expensive Models
+
+Due to high computationan cost of training the models, the models have been trained on less epochs(60) which may cause issue.
+
+### Bounce detection
+
+Due to lack of different camera angles, bounce detection is not so accurate.
+
+### Rally Counter
+
+Fails to reset after a point
+
+### Score Calculation
+
+Due to inconsistenices in bounce detection and interpolation, there is noise in the score detection
+
+
 
 
 
