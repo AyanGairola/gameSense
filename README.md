@@ -1,7 +1,7 @@
 
 # Game Sense
 
-This project aims to process and analyze tennis matches by detecting players,ball and court. The primary goal is generate real time analysis based on player movements and ball tracking.
+This project aims to process and analyze tennis matches by detecting players,ball and court. The primary goal is generate real time analysis based on player movements and ball tracking and event detections.
 
 
 ## Run Locally
