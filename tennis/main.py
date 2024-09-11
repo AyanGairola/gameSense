@@ -30,11 +30,10 @@ def add_caption_to_frame(frame, caption, font_scale=1):
     # Draw a black rectangle for the overlay
     cv2.rectangle(overlay, (0, frame_height - overlay_height), (frame_width, frame_height), (0, 0, 0), -1)
 
-    # Set the font properties
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_thickness = 2
 
-    # Get the text size
+
     text_size = cv2.getTextSize(caption, font, font_scale, font_thickness)[0]
 
     # Calculate text position (centered horizontally, 20 pixels from the bottom)
@@ -73,17 +72,15 @@ def main():
     parser = argparse.ArgumentParser(description='Process video for player and ball detection.')
     parser.add_argument('input_video_path', type=str, help='Path to the input video file')
 
-    # Parse arguments
     args = parser.parse_args()
     input_video_path = args.input_video_path
 
     video_frames = read_video(input_video_path)
 
-    # Initialize the UnifiedTracker for detecting players and ball
+
     unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
 
-    # Detect players and ball using the unified model
-    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/input_video1.pkl")
+    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/test_video.pkl")
     print(f"Type of detections: {type(detections)}")
     print(f"Number of frames with detections: {len(detections)}")
 
@@ -91,7 +88,6 @@ def main():
     interpolated_positions = unified_tracker.interpolate_ball_positions(detections)
     ball_hit_frames = unified_tracker.get_ball_shot_frames(detections)
 
-    # Initialize Court Line Detector
     court_model_path = "models/keypoints_model.pth"
     court_line_detector = CourtLineDetector(court_model_path)
 
@@ -99,14 +95,12 @@ def main():
     court_keypoints = court_line_detector.predict(video_frames[0])
     mini_court = MiniCourt(video_frames[0], court_keypoints)
 
-    # Initialize EventScoreTracker
     score_tracker = EventScoreTracker(mini_court, court_keypoints)
 
-    # Initialize RallyDetector
     total_frames = len(video_frames)
 
 
-    api_key = ""    # Replace with your actual API key
+    api_key = ""  # Replace with your actual API key
     commentary_generator = CommentaryGenerator(api_key)
 
     all_commentary = []  # Collect all commentaries
@@ -115,23 +109,23 @@ def main():
 
     output_video_frames = []
     ball_mini_court_detections = []
-    player_mini_court_detections = []  # Fix: Make sure this is updated with players' positions.
-    court_keypoints_list = []  # Collect court keypoints for all frames
+    player_mini_court_detections = []  
+    court_keypoints_list = []  
 
     previous_point_ended = False
     ball_trail = []
-    # Initialize RallyDetector
+
     rally_detector = RallyDetector(mini_court)
     rally_in_progress = False
     foul_detected = False
 
-    # Variables to track shot types
+
     previous_shot_type_player_1 = None
     previous_shot_type_player_2 = None
     
     previous_ball_position = None
     two_frames_ago_position = None
-    bounce_positions = []  # To store bounce positions
+    bounce_positions = []  
     
     distance_threshold = 10
     # History of previous player positions to handle missing detections
