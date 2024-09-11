@@ -18,30 +18,34 @@ from collections import deque
 import cv2
 
 def add_caption_to_frame(frame, caption, font_scale=1):
-    """Adds a caption with a black overlay background to the video frame at the bottom."""
+    """Adds a caption with a semi-transparent black overlay background to the video frame at the bottom."""
     # Get the height and width of the frame
     frame_height, frame_width = frame.shape[:2]
+
+    # Create an overlay
+    overlay = frame.copy()
+    overlay_height = 80  # Height of the overlay
+
+    # Draw a black rectangle for the overlay
+    cv2.rectangle(overlay, (0, frame_height - overlay_height), (frame_width, frame_height), (0, 0, 0), -1)
 
     # Set the font properties
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_thickness = 2
 
-    # Get the text size to make the rectangle background
+    # Get the text size
     text_size = cv2.getTextSize(caption, font, font_scale, font_thickness)[0]
 
-    # Set the position for the text (50 pixels from the left, 30 pixels from the bottom)
-    text_x = 50
-    text_y = frame_height - 30
+    # Calculate text position (centered horizontally, 20 pixels from the bottom)
+    text_x = (frame_width - text_size[0]) // 2
+    text_y = frame_height - 20
 
-    # Calculate coordinates for the black rectangle (shadow)
-    rectangle_start = (text_x - 10, text_y - text_size[1] - 10)
-    rectangle_end = (text_x + text_size[0] + 10, text_y + 10)
+    # Draw the caption text on the overlay
+    cv2.putText(overlay, caption, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
 
-    # Draw the black rectangle for the text background
-    cv2.rectangle(frame, rectangle_start, rectangle_end, (0, 0, 0), cv2.FILLED)
-
-    # Draw the caption text on top of the black rectangle
-    cv2.putText(frame, caption, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+    # Combine the overlay with the original frame
+    alpha = 0.7  # Transparency factor
+    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
 
     return frame
 
