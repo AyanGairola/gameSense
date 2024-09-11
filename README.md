@@ -14,6 +14,13 @@ Clone the project
 ```bash
   git clone https://github.com/AyanGairola/mM.git
 ```
+or
+```bash
+  git clone git@github.com:AyanGairola/mM.git
+```
+
+
+
 
 Create a new Environment
 
