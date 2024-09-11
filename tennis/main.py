@@ -282,7 +282,7 @@ def main():
 
             # Add current ball position to the ball trail
             ball_trail.append(get_center_of_bbox(ball_position))
-            if len(ball_trail) > 2:  # Keep the ball trail within the last 10 positions
+            if len(ball_trail) > 4:  # Keep the ball trail within the last 4 positions
                 ball_trail.pop(0)
 
             # Draw the ball trail on the frame
