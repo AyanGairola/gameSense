@@ -12,7 +12,7 @@ import numpy as np
 from rally import RallyDetector
 from shot_detection_app2.shot_detector import detect_shot_type
 from event_detection import EventScoreTracker
-from gemini_commentary import CommentaryGenerator
+#from gemini_commentary import CommentaryGenerator
 from collections import deque
 
 def add_caption_to_frame(frame, caption):
@@ -48,14 +48,14 @@ def estimate_missing_player_position(player_positions_history, player_index, fal
 
 def main():
     # Read Video
-    input_video_path = "input_vods/vod4.mp4"
+    input_video_path = "input_vods/input_video1.mp4"
     video_frames = read_video(input_video_path)
 
     # Initialize the UnifiedTracker for detecting players and ball
-    unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
+    unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/last.pt')
 
     # Detect players and ball using the unified model
-    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/unified_detections.pkl")
+    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/input_video1.pkl")
     print(f"Type of detections: {type(detections)}")
     print(f"Number of frames with detections: {len(detections)}")
 
@@ -72,7 +72,7 @@ def main():
     mini_court = MiniCourt(video_frames[0], court_keypoints)
 
     # Initialize EventScoreTracker
-    score_tracker = EventScoreTracker(mini_court)
+    score_tracker = EventScoreTracker(mini_court, court_keypoints)
 
     # Initialize RallyDetector
     rally_detector = RallyDetector(mini_court)
@@ -92,7 +92,6 @@ def main():
     previous_point_ended = False
     ball_trail = []
     rally_count = 0
-    net_x = None  # Initialize net x-position
     rally_in_progress = False
     foul_detected = False
 
@@ -112,11 +111,63 @@ def main():
         # Get court keypoints for the current frame
         court_keypoints = court_line_detector.predict(frame)
         court_keypoints_list.append(court_keypoints)
+        
+        padding_net = 20
 
-        # Calculate net position (middle of keypoints 0 and 2)
-        if net_x is None:
-            if len(court_keypoints) >= 4:  # Ensure there are enough points
-                net_x = (court_keypoints[0] + court_keypoints[2]) // 2
+        # Calculate left net point
+        left_net_x = ((court_keypoints[16] + court_keypoints[20]) / 2) 
+        left_net_y = ((court_keypoints[17] + court_keypoints[21]) / 2) - padding_net
+
+        # Calculate right net point
+        right_net_x = ((court_keypoints[18] + court_keypoints[22]) / 2) 
+        right_net_y = ((court_keypoints[19] + court_keypoints[23]) / 2) - padding_net
+
+        # Draw the net as a line between the left and right net points
+        cv2.line(frame, (int(left_net_x), int(left_net_y)), (int(right_net_x), int(right_net_y)), (255, 0, 0), 2)
+
+
+        net_x = left_net_x
+        
+        
+        
+        # DRAWING COURT GRID
+        p4_x, p4_y = court_keypoints[8], court_keypoints[9]
+        p5_x, p5_y = court_keypoints[10], court_keypoints[11]  
+        p6_x, p6_y = court_keypoints[12], court_keypoints[13]  
+        p7_x, p7_y = court_keypoints[14], court_keypoints[15]  
+        
+        p8_x, p8_y = court_keypoints[16], court_keypoints[17]  
+        p9_x, p9_y = court_keypoints[18], court_keypoints[19]  
+        p10_x, p10_y = court_keypoints[20], court_keypoints[21]  
+        p11_x, p11_y = court_keypoints[22], court_keypoints[23]  
+        p12_x, p12_y = court_keypoints[24], court_keypoints[25]  
+        p13_x, p13_y = court_keypoints[26], court_keypoints[27]  
+
+        # BOUNDARY
+        cv2.line(frame, (int(p4_x), int(p4_y)), (int(p5_x), int(p5_y)), (0, 0, 0), 2)   
+        cv2.line(frame, (int(p6_x), int(p6_y)), (int(p7_x), int(p7_y)), (0, 0, 0), 2)  
+        cv2.line(frame, (int(p4_x), int(p4_y)), (int(p6_x), int(p6_y)), (0, 0, 0), 2)  
+        cv2.line(frame, (int(p5_x), int(p5_y)), (int(p7_x), int(p7_y)), (0, 0, 0), 2)  
+        
+        # INNER LINES
+        
+        cv2.line(frame, (int(p8_x), int(p8_y)), (int(p12_x), int(p12_y)), (0, 0, 0), 2)   
+        cv2.line(frame, (int(p8_x), int(p8_y)), (int(p10_x), int(p10_y)), (0, 0, 0), 2)   
+        cv2.line(frame, (int(p12_x), int(p12_y)), (int(p9_x), int(p9_y)), (0, 0, 0), 2)   
+        cv2.line(frame, (int(p12_x), int(p12_y)), (int(p13_x), int(p13_y)), (0, 0, 0), 2)   
+        cv2.line(frame, (int(p11_x), int(p11_y)), (int(p13_x), int(p13_y)), (0, 0, 0), 2)   
+        cv2.line(frame, (int(p10_x), int(p10_y)), (int(p13_x), int(p13_y)), (0, 0, 0), 2)   
+        cv2.line(frame, (int(p9_x), int(p9_y)), (int(p11_x), int(p11_y)), (0, 0, 0), 2)   
+        
+
+        
+        
+        
+        
+        
+        
+        
+        
 
         # Initialize variables for player positions
         frame_players = {}
@@ -164,7 +215,7 @@ def main():
 
             # Add current ball position to the ball trail
             ball_trail.append(get_center_of_bbox(ball_position))
-            if len(ball_trail) > 10:  # Keep the ball trail within the last 10 positions
+            if len(ball_trail) > 5:  # Keep the ball trail within the last 10 positions
                 ball_trail.pop(0)
 
             # Draw the ball trail on the frame
@@ -174,74 +225,58 @@ def main():
                 prev_center = (int(ball_trail[j - 1][0]), int(ball_trail[j - 1][1]))
                 curr_center = (int(ball_trail[j][0]), int(ball_trail[j][1]))
                 cv2.line(frame, prev_center, curr_center, (0, 255, 255), 2)  # Yellow trail
-                 
-            # Get the net position
-            net_x = mini_court.get_net_position()  # Ensure you have the net's x-coordinate
 
-            # Track bounces using the updated bounce detection function
-            bounce_detected, bounce_position = score_tracker.track_bounces(
-                previous_ball_position, ball_mini_court, two_frames_ago_position, net_x,court_height_threshold=80, velocity_threshold=0.1, slope_threshold=0.005, min_y_change=0.2, y_fallback_threshold=5
+           
 
-            )
-
-            if bounce_detected:
-                print(f"[DEBUG] Frame {i}: Ball bounced at {bounce_position}")
-                bounce_positions.append(ball_center)  # Store the bounce position
-
-            # Draw bounce positions as red dots on the main screen (video frame)
-            for bounce in bounce_positions:
-                cv2.circle(frame, (int(bounce[0]), int(bounce[1])), 10, (0, 0, 255), -1)  # Red dot for bounce
-
-            # Update previous positions for the next frame
-            two_frames_ago_position = previous_ball_position
-            previous_ball_position = ball_mini_court
+                
+            player_positions = [player_1_position, player_2_position]
+            
+    
+            
+            is_bounce, bounce_position = score_tracker.track_bounces(ball_trail, ball_position, player_positions, ball_hit_frames=ball_hit_frames)
 
 
-            # # Determine which player hit the ball based on its position relative to the net
-            # net_x = mini_court.get_net_position()  # Get the x-coordinate of the net
-            # if ball_position[0] < net_x:
-            #     player_hit = 1  # Player 1 hit the ball
-            # else:
-            #     player_hit = 2  # Player 2 hit the ball
-            # print(f"[DEBUG] Frame {i}: Player {player_hit} hit the ball")
+            if is_bounce:
+                # Handle the bounce (e.g., mark it on the frame)
+                print(f"BOUNCE DETECTED AT FRAME {i}")
 
-            # # Detect fouls (net hit or out of bounds) if the rally is in progress
-            # if rally_in_progress:
-            #     foul_type, foul_player = score_tracker.detect_foul(ball_mini_court, player_hit, net_x, [player_1_position, player_2_position])
-
-            #     # Only update score and print message when a foul is detected
-            #     if foul_type and not foul_detected:
-            #         print(f"[DEBUG] Frame {i}: Foul detected: {foul_type} by Player {foul_player}")
-            #         score_tracker.update_score(3 - foul_player)  # Award point to the other player
-
-            #         # Set the foul_detected flag to avoid repeated detections
-            #         foul_detected = True
-
-            #         # Mark the rally as completed
-            #         rally_in_progress = False
-
-            # # Detect the start of a new rally when the ball crosses the net and no foul is detected
-            # if not rally_in_progress:
-            #     if player_hit == 1 and ball_mini_court[0] > net_x:
-            #         # Player 1 hit and ball crossed the net, starting a new rally
-            #         rally_in_progress = True
-            #         foul_detected = False  # Reset foul detection for the new rally
-            #         score_tracker.reset_foul()  # Reset foul detection state
-            #         print(f"[DEBUG] Frame {i}: New rally started by Player 1")
-            #     elif player_hit == 2 and ball_mini_court[0] < net_x:
-            #         # Player 2 hit and ball crossed the net, starting a new rally
-            #         rally_in_progress = True
-            #         foul_detected = False  # Reset foul detection for the new rally
-            #         score_tracker.reset_foul()  # Reset foul detection state
-            #         print(f"[DEBUG] Frame {i}: New rally started by Player 2")
 
             # Update and draw rally count
             rally_detector.update_rally_count(ball_mini_court)  # Update rally count
             rally_count = rally_detector.get_rally_count()  # Get the current rally count
             cv2.putText(frame, f"Rally Count: {rally_count}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            
+            
+            
+            # # Determine which player hit the ball based on its position relative to the net
+            # player_hit = 1 if ball_position[0] < net_x else 2
 
-            # # Draw the score on the frame
-            # frame = score_tracker.draw_score_on_frame(frame)
+            # # Detect fouls (out of bounds, net hit, ball passed player)
+            # foul_type, winner = score_tracker.detect_foul(
+            #     ball_position_mini_court=ball_mini_court,
+            #     player_hit=player_hit,
+            #     net_x=net_x,
+            #     player_positions=player_positions,
+            #     ball_trail=ball_trail,
+            #     ball_hit_frames=ball_hit_frames,
+            #     current_frame=i,  # Assuming `i` is the current frame index
+            #     rally_in_progress=rally_in_progress
+            # )
+
+            # # If a foul is detected and the foul hasn't been flagged yet in this rally
+            # if foul_type and not foul_detected:
+            #     print(f"Foul detected: {foul_type} by Player {player_hit}")
+            #     score_tracker.update_score(winner)  # Award point to the other player
+            #     foul_detected = True
+            #     rally_in_progress = False  # End the rally
+
+            # # If no foul, ensure foul detection is reset for the next rally
+            # if not foul_detected:
+            #     score_tracker.reset_foul_state()
+
+            # Draw the score on the frame
+            frame = score_tracker.draw_score_on_frame(frame)
+
 
             # --- Collect player positions for stats ---
             # Fix: Ensure player positions are recorded on the mini court.
@@ -281,6 +316,8 @@ def main():
         else:
             print(f"Warning: Ball position not available for frame {i}")
             ball_mini_court_detections.append(None)
+            
+        # frame = score_tracker.draw_score_on_frame(frame)
 
         output_video_frames.append(frame)
 
@@ -296,7 +333,50 @@ def main():
         cv2.putText(frame, f"Frame: {i}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Save the processed video with tactical analysis and commentary
-    save_video(output_video_frames, "./output_vods/oaaa6.mp4")
+    save_video(output_video_frames, "./output_vods/op_vd1.mp4")
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+# # Determine which player hit the ball based on its position relative to the net
+            # net_x = mini_court.get_net_position()  # Get the x-coordinate of the net
+            # if ball_position[0] < net_x:
+            #     player_hit = 1  # Player 1 hit the ball
+            # else:
+            #     player_hit = 2  # Player 2 hit the ball
+            # print(f"[DEBUG] Frame {i}: Player {player_hit} hit the ball")
+
+            # # Detect fouls (net hit or out of bounds) if the rally is in progress
+            # if rally_in_progress:
+            #     foul_type, foul_player = score_tracker.detect_foul(ball_mini_court, player_hit, net_x, [player_1_position, player_2_position])
+
+            #     # Only update score and print message when a foul is detected
+            #     if foul_type and not foul_detected:
+            #         print(f"[DEBUG] Frame {i}: Foul detected: {foul_type} by Player {foul_player}")
+            #         score_tracker.update_score(3 - foul_player)  # Award point to the other player
+
+            #         # Set the foul_detected flag to avoid repeated detections
+            #         foul_detected = True
+
+            #         # Mark the rally as completed
+            #         rally_in_progress = False
+
+            # # Detect the start of a new rally when the ball crosses the net and no foul is detected
+            # if not rally_in_progress:
+            #     if player_hit == 1 and ball_mini_court[0] > net_x:
+            #         # Player 1 hit and ball crossed the net, starting a new rally
+            #         rally_in_progress = True
+            #         foul_detected = False  # Reset foul detection for the new rally
+            #         score_tracker.reset_foul()  # Reset foul detection state
+            #         print(f"[DEBUG] Frame {i}: New rally started by Player 1")
+            #     elif player_hit == 2 and ball_mini_court[0] < net_x:
+            #         # Player 2 hit and ball crossed the net, starting a new rally
+            #         rally_in_progress = True
+            #         foul_detected = False  # Reset foul detection for the new rally
+            #         score_tracker.reset_foul()  # Reset foul detection state
+            #         print(f"[DEBUG] Frame {i}: New rally started by Player 2")
