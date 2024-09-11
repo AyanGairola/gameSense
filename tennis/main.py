@@ -69,14 +69,14 @@ def estimate_missing_player_position(player_positions_history, player_index, fal
 
 def main():
     # Read Video
-    input_video_path = "input_vods/test_vod.mp4"
+    input_video_path = "input_vods/input_video1.mp4"
     video_frames = read_video(input_video_path)
 
     # Initialize the UnifiedTracker for detecting players and ball
     unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
 
     # Detect players and ball using the unified model
-    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/test_vod.pkl")
+    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/input_video1.pkl")
     print(f"Type of detections: {type(detections)}")
     print(f"Number of frames with detections: {len(detections)}")
 
@@ -413,7 +413,7 @@ def main():
         cv2.putText(frame, f"Frame: {i}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Save the processed video with tactical analysis and commentary
-    save_video(output_video_frames, "./output_vods/test_vod.mp4")
+    save_video(output_video_frames, "./output_vods/op_vd1.mp4")
 
 if __name__ == "__main__":
     main()

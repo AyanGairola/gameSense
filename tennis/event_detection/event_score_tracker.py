@@ -261,7 +261,7 @@ class EventScoreTracker:
     def draw_score_on_frame(self, frame):
         """Draw the current score for both players on the frame."""
         frame_height, frame_width = frame.shape[:2]
-        score_box_position = (10, frame_height - 120)
+        score_box_position = (10, frame_height - 140)
         box_width = 410
         box_height = 80
 
@@ -270,9 +270,9 @@ class EventScoreTracker:
 
         # Display Player 1 and Player 2 points, games, and sets
         cv2.putText(frame, f"Player 1: {self.player_scores[1]} pts | {self.game_scores[1]} games | {self.set_scores[1]} sets", 
-                    (20, frame_height - 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    (20, frame_height - 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(frame, f"Player 2: {self.player_scores[2]} pts | {self.game_scores[2]} games | {self.set_scores[2]} sets", 
-                    (20, frame_height - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    (20, frame_height - 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
         return frame
     
