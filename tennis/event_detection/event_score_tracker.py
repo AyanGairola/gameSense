@@ -203,9 +203,7 @@ class EventScoreTracker:
         - Detect ball passing the opponent player
         - Detect if the ball bounced out of bounds
         """
-        # Ensure current_frame is an integer, otherwise handle accordingly
-        if isinstance(current_frame, (list, np.ndarray)):
-            current_frame = current_frame[0]  # Take the first element if it's an array/list
+        
 
         # If a foul was detected recently, skip foul detection
         if current_frame - self.last_foul_frame <= self.foul_timeout:
@@ -216,7 +214,7 @@ class EventScoreTracker:
             ball_position=ball_position, 
             player_positions=player_positions, 
             rally_in_progress=rally_in_progress,
-            ball_trail = ball_trail
+            current_frame=current_frame
         )
 
         if ball_passed_player:
@@ -308,63 +306,128 @@ class EventScoreTracker:
         return result == -1
 
 
-    def _did_ball_pass_player(self, ball_position, player_positions, rally_in_progress, distance_threshold=50):
+    
+    def _did_ball_pass_player(self, ball_position, player_positions, rally_in_progress, current_frame, min_frame_gap=150, distance_threshold=50):
+        """
+        Check if the ball has passed the opponent player after being hit.
+
+        :param ball_position: Current ball position (x, y)
+        :param player_positions: List or dictionary of player positions
+        :param rally_in_progress: Boolean indicating whether the rally is currently active
+        :param current_frame: The current frame number (pass this from the main function)
+        :param min_frame_gap: Minimum gap between frames to avoid continuous foul detection
+        :param distance_threshold: Distance threshold to confirm if the ball has truly passed the player
+        :return: Boolean indicating if the ball has passed the opponent player
+        """
         # Get the opponent player
         opponent_player = 2 if self.last_shot_player == 1 else 1
 
+        # Ensure player_positions is a dictionary or a list with valid player positions
         if isinstance(player_positions, dict):
             player_position = player_positions.get(opponent_player, None)
         else:
-            player_position = player_positions[opponent_player - 1]
-
+            player_position = player_positions[opponent_player - 1]  # Adjust index for 1-based to 0-based indexing
+        
         if player_position is None:
-            return False
+            return False  # No valid position for the opponent, assume ball hasn't passed
 
-        # Extract ball's center if the position is given as a bounding box
+        # Extract ball's center if the position is given as a bounding box (x1, y1, x2, y2)
         if isinstance(ball_position, (list, tuple)) and len(ball_position) == 4:
-            ball_x = (ball_position[0] + ball_position[2]) / 2
-            ball_y = (ball_position[1] + ball_position[3]) / 2
+            ball_x = (ball_position[0] + ball_position[2]) / 2  # Average of x1 and x2
+            ball_y = (ball_position[1] + ball_position[3]) / 2  # Average of y1 and y2
         else:
             ball_x, ball_y = ball_position
 
-        # Extract player position
+        # Extract player's x and y position
         player_x, player_y = player_position
 
-        # Calculate player orientation using previous and current positions
+        # Use player's orientation to decide if the ball is behind the player
         player_orientation_vector = self._calculate_player_orientation(opponent_player)
 
         # Calculate the vector from player to the ball
         ball_vector = np.array([ball_x - player_x, ball_y - player_y])
 
-        # Calculate dot product to determine if ball is behind the player
-        dot_product = np.dot(player_orientation_vector, ball_vector)
+        # Check if the ball has passed behind the player by comparing the ball vector with the player's orientation
+        passed_player = np.dot(player_orientation_vector, ball_vector) < 0
 
-        # Ensure ball is behind the player and apply the distance threshold
-        distance = np.linalg.norm(np.array([ball_x, ball_y]) - np.array([player_x, player_y]))
-        if distance > distance_threshold and dot_product < 0:
+        # Check frame gap to avoid multiple fouls in consecutive frames
+        if self.last_foul_frame is None or (current_frame - self.last_foul_frame) > min_frame_gap:
+            self.last_foul_frame = current_frame  # Update last foul frame
+            
+            # Apply the distance threshold
+            distance = np.linalg.norm(np.array([ball_x, ball_y]) - np.array([player_x, player_y]))
+            if distance > distance_threshold and passed_player:
+                return True  # Ball has passed the player
+
+        return False  # Ball hasn't passed the player
+    
+    
+    
+    
+    def _check_ball_movement_over_frames(self, current_ball_position, current_player_position):
+        """
+        Check if the ball consistently passed the player over multiple frames.
+        This prevents false positives from a single frame.
+
+        :param current_ball_position: Ball's current position (x, y)
+        :param current_player_position: Player's current position (x, y)
+        :return: Boolean indicating whether the ball consistently passed the player
+        """
+        # Track the last few ball and player positions to ensure consistent movement
+        # Store these positions in the instance as history
+        self.ball_position_history.append(current_ball_position)
+        self.player_position_history.append(current_player_position)
+
+        # Check if the ball consistently moved behind the player
+        # We can use a threshold of 3 frames to confirm the ball has truly passed
+        if len(self.ball_position_history) >= 3:
+            for i in range(-3, 0):
+                ball_pos = self.ball_position_history[i]
+                player_pos = self.player_position_history[i]
+
+                # Calculate the vector from player to the ball
+                ball_vector = np.array([ball_pos[0] - player_pos[0], ball_pos[1] - player_pos[1]])
+
+                # Use the player's orientation to check if the ball is consistently behind
+                player_orientation_vector = self._calculate_player_orientation(self.last_shot_player)
+                if np.dot(player_orientation_vector, ball_vector) > 0:
+                    # If the ball hasn't been consistently behind, clear history and return False
+                    self.ball_position_history = []
+                    self.player_position_history = []
+                    return False
+
+            # If the ball consistently passed over multiple frames, clear history and return True
+            self.ball_position_history = []
+            self.player_position_history = []
             return True
 
+        return False  # Not enough frames to make a decision yet
     
     
-    
-    def _calculate_player_orientation(self, opponent_player):
+    def _calculate_player_orientation(self, player_idx):
         """
-        Calculate the orientation of the player based on their previous and current positions.
-
-        :param opponent_player: The opponent player index (1 or 2)
-        :return: Orientation vector
+        Calculate the orientation of the player based on their current and previous positions.
+        
+        :param player_idx: The index of the player (1 or 2)
+        :return: Orientation vector of the player
         """
-        # Ensure previous_positions has data for both players
         if len(self.previous_positions) < 2:
-            # Return a default orientation (e.g., facing forward)
-            return np.array([0, -1])  # Default vector pointing upwards
+            # If not enough frames have passed, assume orientation is straight ahead (default)
+            return np.array([1, 0])
 
-        # Get the previous and current positions of the opponent
-        previous_pos = self.previous_positions[opponent_player - 1]  # Adjust index for 1-based to 0-based indexing
-        current_pos = self.current_positions[opponent_player - 1]  # Adjust index for 1-based to 0-based indexing
+        # Get previous and current positions for the player
+        previous_pos = self.previous_positions[player_idx - 1]  # Adjust for 1-based indexing
+        current_pos = self.current_positions[player_idx - 1]
 
-        # Calculate the orientation vector (direction of movement)
-        return np.array(current_pos) - np.array(previous_pos)
+        # Calculate the orientation vector based on movement direction
+        orientation_vector = np.array(current_pos) - np.array(previous_pos)
+
+        # Normalize the orientation vector to unit length
+        norm = np.linalg.norm(orientation_vector)
+        if norm == 0:  # Prevent division by zero
+            return np.array([1, 0])
+        
+        return orientation_vector / norm  # Return the normalized orientation vector
 
 
     def _is_behind_player(self, player_orientation, ball_center_x, ball_center_y, player_pos):

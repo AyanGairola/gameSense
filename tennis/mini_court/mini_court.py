@@ -137,6 +137,9 @@ class MiniCourt():
         # Draw the background rectangle based on court keypoints
         frame = self.draw_background_rectangle(frame, court_keypoints)
 
+        if court_keypoints is None:
+            return frame  # Return the unchanged frame
+        
         mini_court_keypoints = []
 
         # Scale all the court keypoints based on the mini court dimensions
