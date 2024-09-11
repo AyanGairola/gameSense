@@ -106,8 +106,8 @@ class MiniCourt():
         shapes = np.zeros_like(frame, np.uint8)
 
         # Define scaling factors to enlarge the rectangle around the mini court
-        margin_factor_x = 0.2  # Increase by 20% horizontally
-        margin_factor_y = 0.3  # Increase by 20% vertically
+        margin_factor_x = 0.5  # Increase by 20% horizontally
+        margin_factor_y = 0.5  # Increase by 20% vertically
         shift_left = 0  # Shift mini court left by 30 pixels
 
         # Calculate new top-left and bottom-right points for the larger rectangle
@@ -137,6 +137,9 @@ class MiniCourt():
         # Draw the background rectangle based on court keypoints
         frame = self.draw_background_rectangle(frame, court_keypoints)
 
+        if court_keypoints is None:
+            return frame  # Return the unchanged frame
+        
         mini_court_keypoints = []
 
         # Scale all the court keypoints based on the mini court dimensions
@@ -185,7 +188,7 @@ class MiniCourt():
         )
 
         # Draw the net line between the two midpoints
-        cv2.line(frame, midpoint_0_2, midpoint_1_3, (255, 0, 0), 2)  # Red line for the net
+        cv2.line(frame, midpoint_0_2, midpoint_1_3, (255, 0, 0), 2)  # Blue line for the net
 
         return frame
     

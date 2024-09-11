@@ -32,3 +32,5 @@ tennis/models/yolov8x-pose-p6.pt
 tennis/models/yolov8x-pose.pt
 
 runs
+tennis/input_vods/test_vod.mp4
+tennis/output_vods/test_vod.mp4
