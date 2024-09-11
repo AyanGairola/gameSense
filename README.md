@@ -170,7 +170,30 @@ Fails to reset after a point
 
 Due to inconsistenices in bounce detection and interpolation, there is noise in the score detection
 
+## Future Work
 
+### Pose Estimation 
+
+Leverage advanced pose estimation models for accurate and advanced shot detection
+
+### Doubles
+
+Expand the project for doubles game
+
+### Coaching Assistance based on advanced analytics
+
+Incorporating advanced analytics can significantly improve a player’s understanding of their strengths and weaknesses also helping them with training programs accordingly.
+
+### Match outcome prediction
+The goal is to leverage player performance data, match conditions, and situational analysis to accurately predict who will win a match.
+
+### Text to Speech
+
+Utizile advanced tts models to convert our generated commentary into voiceover
+
+### Support for Mutiple Camera Angles
+
+Add support for mutiple camera angles to imporve user experience
 
 
 
