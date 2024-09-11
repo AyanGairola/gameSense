@@ -6,35 +6,38 @@ from collections import deque
 class CommentaryGenerator:
     def __init__(self, api_key):
         self.rally_count = 0
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
-
+        self.use_fallback = False
+        
+        if api_key is None or api_key == "":
+            print("Warning: No API key provided. Using fallback commentary.")
+            self.use_fallback = True
+        else:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel("gemini-1.5-flash")
+        
         # Using deque to store the timestamps of API requests for rate limiting
         self.request_times = deque()
-        
         self.max_requests_per_minute = 12
         self.request_interval = 60 / self.max_requests_per_minute
         
 
     def generate_frame_commentary(self, ball_hit_frames, shot_types, rally_count, frame_index):
-        self._wait_for_rate_limit()
+        if self.use_fallback:
+            return self.fallback_commentary(ball_hit_frames, shot_types, rally_count, frame_index)
         
-
+        self._wait_for_rate_limit()
         context = f"""
         Frame: {frame_index}
         Rally count: {rally_count}
         Player 1 shot: {shot_types[0]}
         Player 2 shot: {shot_types[1]}
-    
         """
-
         prompt = f"""
         Generate a brief, engaging tennis commentary based on the following context:
         {context}
         The commentary should be dynamic, reflect the current state of the game, and sound natural.
         Focus on the most interesting aspects of the current play.
         """
-
         try:
             response = self.model.generate_content(prompt, generation_config=genai.types.GenerationConfig(
                 max_output_tokens=100,
@@ -42,15 +45,13 @@ class CommentaryGenerator:
             ))
             commentary = response.text.strip()
             self._record_request_time()
-        
         except genai.types.BlockedPromptException as e:
             print(f"Daily limit exceeded or content blocked: {e}")
             commentary = self.fallback_commentary(ball_hit_frames, shot_types, rally_count, frame_index)
-            
         except Exception as e:
             print(f"Error generating commentary: {e}")
-            commentary = self.fallback_commentary(ball_hit_frames, shot_types, rally_count,  frame_index)
-
+            commentary = self.fallback_commentary(ball_hit_frames, shot_types, rally_count, frame_index)
+        return commentary
         return commentary
 
     def _wait_for_rate_limit(self):
@@ -83,6 +84,4 @@ class CommentaryGenerator:
             commentary_lines.append("What a thrilling game!")
         return " ".join(commentary_lines)
 
-    def save_commentary(self, filepath, commentary):
-        with open(filepath, "w") as f:
-            f.write(commentary)
+    
