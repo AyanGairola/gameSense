@@ -12,7 +12,7 @@ This project requires python 3.10
 Clone the project
 
 ```bash
-  git clone https://link-to-project
+  git clone https://github.com/AyanGairola/mM.git
 ```
 
 Create a new Environment
