@@ -1,9 +1,7 @@
 import numpy as np
 import cv2
 import math
-from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
-
 
 
 class EventScoreTracker:
@@ -21,6 +19,7 @@ class EventScoreTracker:
         self.ball_trail = []
         self.last_foul_frame = -1  # Keep track of the last frame a foul was detected
         self.foul_timeout = 20  # Timeout to avoid consecutive fouls
+        self.ball_passed_player = False  # To track if ball has passed the opponent player
         self.previous_positions = []
         self.velocity_history = []
         self.court_keypoints = court_keypoints
@@ -56,28 +55,22 @@ class EventScoreTracker:
     def detect_foul(self, ball_position_mini_court, player_hit, net_x, player_positions, ball_trail, ball_hit_frames, current_frame, rally_in_progress):
         """
         Detect fouls based on the ball's position on the mini court.
-        - Detect net hit
+        Focus on two fouls:
         - Detect ball passing the opponent player
         - Detect if the ball bounced out of bounds
-        """
+        """    
+
         # If a foul was detected recently, skip foul detection
         if current_frame - self.last_foul_frame <= self.foul_timeout:
             return None, None
-
-        # Check for net hit
-        net_hit = self._is_net_hit(ball_position_mini_court, player_hit, net_x)
-        if net_hit:
-            self.last_foul_frame = current_frame
-            return "net_hit", self._get_other_player(player_hit)
 
         # Check for ball passing the opponent player
         ball_passed_player = self._did_ball_pass_player(
             ball_position=ball_position_mini_court, 
             player_positions=player_positions, 
-            player_hit=player_hit, 
-            rally_in_progress=rally_in_progress  # Pass rally_in_progress flag
+            rally_in_progress=rally_in_progress
         )
-        
+
         if ball_passed_player:
             self.last_foul_frame = current_frame
             return "ball_passed_player", self._get_other_player(player_hit)
@@ -90,13 +83,13 @@ class EventScoreTracker:
             ball_hit_frames=ball_hit_frames
         )
         
-        if is_bounce and self._is_ball_out_of_bounds_on_actual_court(bounce_position, player_hit, ball_trail, player_positions, ball_hit_frames):
-            self.last_foul_frame = current_frame
-            return "out_of_bounds", self._get_other_player(player_hit)
+        # if is_bounce and self._is_ball_out_of_bounds_on_actual_court(bounce_position, player_hit):
+        #     self.last_foul_frame = current_frame
+        #     return "out_of_bounds", self._get_other_player(player_hit)
 
         return None, None
 
-
+    
     def reset_foul_state(self):
         """Reset the foul detection state for a new rally."""
         self.foul_detected = False
@@ -126,27 +119,10 @@ class EventScoreTracker:
         # If the ball is below the threshold and has not crossed the net, it's a net hit
         return True
 
-    
-    
-    
-
     def _get_other_player(self, player_hit):
         """Get the opponent player."""
         return 2 if player_hit == 1 else 1
 
-
-    def calculate_angle(x1, y1, x2, y2):
-        """Calculate the angle between two points (in degrees)."""
-        return math.degrees(math.atan2(y2 - y1, x2 - x1))
-
-    def calculate_slope(x1, y1, x2, y2):
-        """Calculate the slope between two points."""
-        if x2 - x1 == 0:
-            return float('inf')  # Avoid division by zero
-        return (y2 - y1) / (x2 - x1)
-
-    
-    
     def track_bounces(self, ball_trail, current_position, player_positions, window_size=5, vertical_velocity_threshold=1.9, direction_change_threshold=0.9, velocity_slowdown_threshold=0.5, horizontal_threshold=20, min_time_between_bounces=20, ball_hit_frames=[]):
         """
         Detect bounces using velocity changes, direction reversals, and horizontal analysis.
@@ -180,11 +156,11 @@ class EventScoreTracker:
             for i in range(len(positions) - 1)
         ]
         
-        # Calculate vertical accelerations
-        vertical_accelerations = [
+        # Calculate vertical accelerations and smooth them
+        vertical_accelerations = gaussian_filter1d([
             velocities[i+1][1] - velocities[i][1]
             for i in range(len(velocities) - 1)
-        ]
+        ], sigma=1)
 
         # Horizontal movements between frames
         horizontal_movements = [
@@ -218,23 +194,72 @@ class EventScoreTracker:
 
         return False, None
 
-
-    def _is_near_player(self, ball_position, player_positions, proximity_threshold=50):
+    
+    
+    def detect_foul(self, ball_position, player_hit, net_x, player_positions, ball_trail, ball_hit_frames, current_frame, rally_in_progress):
         """
-        Check if the ball is near either player, indicating that it's likely a hit and not a bounce.
+        Detect fouls based on the ball's position on the mini court.
+        Focus on two fouls:
+        - Detect ball passing the opponent player
+        - Detect if the ball bounced out of bounds
+        """
+        # Ensure current_frame is an integer, otherwise handle accordingly
+        if isinstance(current_frame, (list, np.ndarray)):
+            current_frame = current_frame[0]  # Take the first element if it's an array/list
+
+        # If a foul was detected recently, skip foul detection
+        if current_frame - self.last_foul_frame <= self.foul_timeout:
+            return None, None
+
+        # Check for ball passing the opponent player
+        ball_passed_player = self._did_ball_pass_player(
+            ball_position=ball_position, 
+            player_positions=player_positions, 
+            rally_in_progress=rally_in_progress,
+            ball_trail = ball_trail
+        )
+
+        if ball_passed_player:
+            self.last_foul_frame = current_frame
+            return "ball_passed_player", self._get_other_player(player_hit)
+
+        # Check for out-of-bounds using bounce detection
+        is_bounce, bounce_position = self.track_bounces(
+            ball_trail=ball_trail, 
+            current_position=ball_position, 
+            player_positions=player_positions, 
+            ball_hit_frames=ball_hit_frames
+        )
         
-        :param ball_position: Current ball position
-        :param player_positions: List of player positions
-        :param proximity_threshold: Distance threshold to determine if the ball is near a player
-        :return: Boolean indicating if the ball is near a player
-        """
-        for player_position in player_positions:
-            distance = np.linalg.norm(np.array(ball_position) - np.array(player_position))
-            if distance < proximity_threshold:
-                return True
-            
-        return False
+        # if is_bounce and self._is_ball_out_of_bounds_on_actual_court(bounce_position, player_hit):
+        #     self.last_foul_frame = current_frame
+        #     return "out_of_bounds", self._get_other_player(player_hit)
 
+        return None, None
+    
+    
+    def _calculate_angle_between_vectors(self, vector1, vector2):
+        """
+        Helper function to calculate the angle between two vectors in degrees.
+
+        :param vector1: First vector (x, y)
+        :param vector2: Second vector (x, y)
+        :return: Angle between the vectors in degrees
+        """
+        dot_product = np.dot(vector1, vector2)
+        magnitude1 = np.linalg.norm(vector1)
+        magnitude2 = np.linalg.norm(vector2)
+        
+        # Calculate the angle using the dot product formula
+        cos_angle = dot_product / (magnitude1 * magnitude2)
+        cos_angle = np.clip(cos_angle, -1.0, 1.0)  # To handle any floating-point errors
+        angle_radians = np.arccos(cos_angle)
+
+        # Convert to degrees
+        return np.degrees(angle_radians)
+
+    
+    
     def draw_score_on_frame(self, frame):
         """Draw the current score for both players on the frame."""
         frame_height, frame_width = frame.shape[:2]
@@ -243,7 +268,7 @@ class EventScoreTracker:
         box_height = 80
 
         # Draw score box
-        cv2.rectangle(frame, score_box_position,(score_box_position[0] + box_width, score_box_position[1] + box_height), (0, 0, 0), -1)
+        cv2.rectangle(frame, score_box_position, (score_box_position[0] + box_width, score_box_position[1] + box_height), (0, 0, 0), -1)
 
         # Display Player 1 and Player 2 points, games, and sets
         cv2.putText(frame, f"Player 1: {self.player_scores[1]} pts | {self.game_scores[1]} games | {self.set_scores[1]} sets", 
@@ -254,44 +279,106 @@ class EventScoreTracker:
         return frame
     
     
-    def _did_ball_pass_player(self, ball_position, player_positions, player_hit, rally_in_progress):
+    def _is_ball_out_of_bounds_on_actual_court(self, bounce_position, player_hit):
         """
-        Check if the ball has passed the opponent player after being hit.
-        
-        :param ball_position: Current ball position (x, y)
-        :param player_positions: List or dictionary of player positions
-        :param player_hit: The player who hit the ball (1 or 2)
-        :param rally_in_progress: Boolean indicating whether the rally is currently active
-        :return: Boolean indicating if the ball has passed the opponent player
-        """
-        # Get the opponent player
-        opponent_player = 2 if player_hit == 1 else 1
+        Check if the ball has bounced out of bounds using the actual court boundaries.
 
-        # Ensure player_positions is a dictionary or a list with valid player positions
+        :param bounce_position: The (x, y) position where the ball has bounced on the actual court.
+        :param player_hit: Player who last hit the ball (1 or 2).
+        :return: Boolean indicating if the ball bounced out of bounds.
+        """
+        # Extract the necessary keypoints to define the boundaries of the actual court
+        p8_x, p8_y = self.court_keypoints[16], self.court_keypoints[17]    # A point on the court
+        p9_x, p9_y = self.court_keypoints[18], self.court_keypoints[19]    # A point on the court
+        p10_x, p10_y = self.court_keypoints[20], self.court_keypoints[21]  # A point on the court
+        p11_x, p11_y = self.court_keypoints[22], self.court_keypoints[23]  # A point on the court
+        p12_x, p12_y = self.court_keypoints[24], self.court_keypoints[25]  # A point on the court
+        p13_x, p13_y = self.court_keypoints[26], self.court_keypoints[27]  # A point on the court
+
+        # Create a boundary polygon for the actual court using the court keypoints
+        boundary_polygon = np.array([
+            [p8_x, p8_y], [p9_x, p9_y], [p10_x, p10_y], [p11_x, p11_y], [p12_x, p12_y], [p13_x, p13_y]
+        ], dtype=np.float32).reshape((-1, 1, 2))
+
+        # Check if the bounce's position is outside this polygon
+        bounce_x, bounce_y = bounce_position
+        result = cv2.pointPolygonTest(boundary_polygon, (float(bounce_x), float(bounce_y)), False)
+
+        # If result is -1, the bounce is out of bounds
+        return result == -1
+
+
+    def _did_ball_pass_player(self, ball_position, player_positions, rally_in_progress, distance_threshold=50):
+        # Get the opponent player
+        opponent_player = 2 if self.last_shot_player == 1 else 1
+
         if isinstance(player_positions, dict):
             player_position = player_positions.get(opponent_player, None)
         else:
-            player_position = player_positions[opponent_player - 1]  # Adjust index for 1-based to 0-based indexing
-        
-        if player_position is None:
-            return False  # No valid position for the opponent, assume ball hasn't passed
+            player_position = player_positions[opponent_player - 1]
 
-        # Check if the ball has passed the opponent based on its x-coordinate
-        ball_x, ball_y = ball_position
+        if player_position is None:
+            return False
+
+        # Extract ball's center if the position is given as a bounding box
+        if isinstance(ball_position, (list, tuple)) and len(ball_position) == 4:
+            ball_x = (ball_position[0] + ball_position[2]) / 2
+            ball_y = (ball_position[1] + ball_position[3]) / 2
+        else:
+            ball_x, ball_y = ball_position
+
+        # Extract player position
         player_x, player_y = player_position
 
-        # Track if ball has passed and reset at the start of each rally
-        if not rally_in_progress:  # This means a new rally or shot has started
-            self.ball_passed_player = False  # Reset the pass detection flag
+        # Calculate player orientation using previous and current positions
+        player_orientation_vector = self._calculate_player_orientation(opponent_player)
+
+        # Calculate the vector from player to the ball
+        ball_vector = np.array([ball_x - player_x, ball_y - player_y])
+
+        # Calculate dot product to determine if ball is behind the player
+        dot_product = np.dot(player_orientation_vector, ball_vector)
+
+        # Ensure ball is behind the player and apply the distance threshold
+        distance = np.linalg.norm(np.array([ball_x, ball_y]) - np.array([player_x, player_y]))
+        if distance > distance_threshold and dot_product < 0:
+            return True
+
+    
+    
+    
+    def _calculate_player_orientation(self, opponent_player):
+        """
+        Calculate the orientation of the player based on their previous and current positions.
+
+        :param opponent_player: The opponent player index (1 or 2)
+        :return: Orientation vector
+        """
+        # Ensure previous_positions has data for both players
+        if len(self.previous_positions) < 2:
+            # Return a default orientation (e.g., facing forward)
+            return np.array([0, -1])  # Default vector pointing upwards
+
+        # Get the previous and current positions of the opponent
+        previous_pos = self.previous_positions[opponent_player - 1]  # Adjust index for 1-based to 0-based indexing
+        current_pos = self.current_positions[opponent_player - 1]  # Adjust index for 1-based to 0-based indexing
+
+        # Calculate the orientation vector (direction of movement)
+        return np.array(current_pos) - np.array(previous_pos)
+
+
+    def _is_behind_player(self, player_orientation, ball_center_x, ball_center_y, player_pos):
+        """
+        Determine if the ball is behind the player based on the player's orientation.
         
-        if not self.ball_passed_player:
-            if player_hit == 1 and ball_x > player_x:
-                self.ball_passed_player = True  # Mark that the ball has passed Player 2 (opponent)
-                return True
-            elif player_hit == 2 and ball_x < player_x:
-                self.ball_passed_player = True  # Mark that the ball has passed Player 1 (opponent)
-                return True
-
-        return False  # Ball hasn't passed the opponent
-
-
+        :param player_orientation: Orientation vector of the player
+        :param ball_center_x: X-coordinate of the ball's center
+        :param ball_center_y: Y-coordinate of the ball's center
+        :param player_pos: Current position of the player
+        :return: Boolean indicating if the ball is behind the player
+        """
+        ball_vector = np.array([ball_center_x, ball_center_y]) - np.array(player_pos)
+        dot_product = np.dot(player_orientation, ball_vector)
+        
+        # If the dot product is negative, the ball is behind the player
+        return dot_product < 0
