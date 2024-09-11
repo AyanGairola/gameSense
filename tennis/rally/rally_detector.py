@@ -1,6 +1,4 @@
 from mini_court import MiniCourt
-import numpy as np
-import cv2
 
 class RallyDetector:
     def __init__(self, mini_court):
@@ -9,11 +7,8 @@ class RallyDetector:
         self.rally_count = 0
         self.rally_ongoing = False
 
-    def update_rally_count(self, ball_position):
-        """
-        Update the rally count based on whether the ball has crossed the net on the mini court.
-        """
-        # Get the x-coordinate of the net position on the mini court (middle of the court)
+    # Update the rally count based on whether the ball has crossed the net on the mini court.
+    def update_rally_count(self, ball_position):    
         middle_x = self.mini_court.start_x + (self.mini_court.get_width_of_mini_court() // 2)
 
         # Check if the ball has crossed the net
@@ -32,11 +27,9 @@ class RallyDetector:
         self.last_ball_position = ball_position
 
     def get_rally_count(self):
-        """Return the current rally count."""
         return self.rally_count
 
     def reset_rally(self):
-        """Reset the rally count and state."""
         self.rally_count = 0
         self.last_ball_position = None
         self.rally_ongoing = False

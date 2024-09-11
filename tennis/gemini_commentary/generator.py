@@ -8,7 +8,10 @@ class CommentaryGenerator:
         self.rally_count = 0
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-1.5-flash")
+
+        # Using deque to store the timestamps of API requests for rate limiting
         self.request_times = deque()
+        
         self.max_requests_per_minute = 12
         self.request_interval = 60 / self.max_requests_per_minute
         
@@ -17,7 +20,6 @@ class CommentaryGenerator:
         self._wait_for_rate_limit()
         
 
-        # Prepare the context for the AI model
         context = f"""
         Frame: {frame_index}
         Rally count: {rally_count}
@@ -67,7 +69,7 @@ class CommentaryGenerator:
             self.request_times.popleft()
 
     def fallback_commentary(self, ball_hit_frames, shot_types, rally_count,  frame_index):
-        # This method contains your original commentary generation logic
+        
         commentary_lines = []
         shot_type_player_1, shot_type_player_2 = shot_types
         if shot_type_player_1:

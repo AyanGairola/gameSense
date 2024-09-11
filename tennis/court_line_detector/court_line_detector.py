@@ -6,8 +6,12 @@ import numpy as np
 
 class CourtLineDetector:
     def __init__(self, model_path):
+
+        # Load pre-trained weights for ResNet50 model on ImageNet data
         weights = models.ResNet50_Weights.IMAGENET1K_V1
         self.model = models.resnet50(weights=weights)
+
+        # Change the final fully connected layer to predict 28 (14 keypoints with x and y coordinates)
         self.model.fc = torch.nn.Linear(self.model.fc.in_features, 14*2)
         
         state_dict = torch.load(model_path, map_location='cpu')
@@ -17,8 +21,10 @@ class CourtLineDetector:
         
         self.transform = transforms.Compose([
             transforms.ToPILImage(),
-            transforms.Resize((224, 224)),
+            transforms.Resize((224, 224)),  # Resize image to 224x224 (input size for ResNet50)
             transforms.ToTensor(),
+
+            # Normalize with ImageNet mean and std (important for pre-trained models)
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
@@ -26,7 +32,6 @@ class CourtLineDetector:
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_tensor = self.transform(image_rgb).unsqueeze(0)
         
-        # Use float32 precision
         image_tensor = image_tensor.float()
         
         with torch.no_grad():
@@ -34,13 +39,15 @@ class CourtLineDetector:
         
         keypoints = outputs.squeeze().cpu().numpy()
         original_h, original_w = image.shape[:2]
+
+        # Scale the points to match the original image
         keypoints[::2] = np.clip(keypoints[::2] * (original_w / 224.0), 0, original_w)
         keypoints[1::2] = np.clip(keypoints[1::2] * (original_h / 224.0), 0, original_h)
 
         return keypoints
 
     def draw_keypoints(self, image, keypoints):
-        # Plot keypoints on the image
+
         for i in range(0, len(keypoints), 2):
             x = int(keypoints[i])
             y = int(keypoints[i+1])
@@ -51,13 +58,11 @@ class CourtLineDetector:
     def process_video(self, video_frames):
         output_video_frames = []
         for frame in video_frames:
-            # Detect keypoints for the current frame
+    
             keypoints = self.predict(frame)
             
-            # Draw the detected keypoints on the frame
             frame_with_keypoints = self.draw_keypoints(frame, keypoints)
             
-            # Store the processed frame
             output_video_frames.append(frame_with_keypoints)
         
         return output_video_frames

@@ -1,18 +1,17 @@
 import numpy as np
 import cv2
-from utils import convert_pixel_distance_to_meters
 
 def draw_player_stats(output_video_frames, player_stats):
     for index, row in player_stats.iterrows():
         # Check if index is within the bounds of output_video_frames
         if index >= len(output_video_frames):
             print(f"Warning: Frame {index} out of bounds.")
-            continue  # Skip this frame
+            continue  
         
         player_1_shot_speed = row['player_1_last_shot_speed']
         player_2_shot_speed = row['player_2_last_shot_speed']
-        player_1_current_speed = row['player_1_current_speed']  # Use current speed
-        player_2_current_speed = row['player_2_current_speed']  # Use current speed
+        player_1_current_speed = row['player_1_current_speed']  
+        player_2_current_speed = row['player_2_current_speed']  
         avg_player_1_shot_speed = row['player_1_average_shot_speed']
         avg_player_2_shot_speed = row['player_2_average_shot_speed']
         avg_player_1_speed = row['player_1_average_speed']

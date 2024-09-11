@@ -1,7 +1,5 @@
 import cv2
 
-#utility function to read and return video
-
 def read_video(video_path):
     cap = cv2.VideoCapture(video_path)
     frames = []
