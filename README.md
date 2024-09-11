@@ -195,5 +195,12 @@ Utizile advanced tts models to convert our generated commentary into voiceover
 
 Add support for mutiple camera angles to imporve user experience
 
+## Refrences and Resources
 
+https://universe.roboflow.com/
+
+https://medium.com/@kosolapov.aetp/tennis-analysis-using-deep-learning-and-machine-learning-a5a74db7e2ee
+
+
+To generate commentary - Google gemini
 
