@@ -12,19 +12,36 @@ import numpy as np
 from rally import RallyDetector
 from shot_detection_app2.shot_detector import detect_shot_type
 from event_detection import EventScoreTracker
-#from gemini_commentary import CommentaryGenerator
+from gemini_commentary import CommentaryGenerator
 from collections import deque
 
-def add_caption_to_frame(frame, caption):
-    """Adds a caption to the video frame at the bottom."""
+import cv2
+
+def add_caption_to_frame(frame, caption, font_scale=1):
+    """Adds a caption with a black overlay background to the video frame at the bottom."""
     # Get the height and width of the frame
     frame_height, frame_width = frame.shape[:2]
 
-    # Set the position to the bottom of the frame
-    text_position = (50, frame_height - 30)  # 50 pixels from the bottom
+    # Set the font properties
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_thickness = 2
 
-    # Draw the caption on the frame
-    cv2.putText(frame, caption, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+    # Get the text size to make the rectangle background
+    text_size = cv2.getTextSize(caption, font, font_scale, font_thickness)[0]
+
+    # Set the position for the text (50 pixels from the left, 30 pixels from the bottom)
+    text_x = 50
+    text_y = frame_height - 30
+
+    # Calculate coordinates for the black rectangle (shadow)
+    rectangle_start = (text_x - 10, text_y - text_size[1] - 10)
+    rectangle_end = (text_x + text_size[0] + 10, text_y + 10)
+
+    # Draw the black rectangle for the text background
+    cv2.rectangle(frame, rectangle_start, rectangle_end, (0, 0, 0), cv2.FILLED)
+
+    # Draw the caption text on top of the black rectangle
+    cv2.putText(frame, caption, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
 
     return frame
 
@@ -48,14 +65,14 @@ def estimate_missing_player_position(player_positions_history, player_index, fal
 
 def main():
     # Read Video
-    input_video_path = "input_vods/vod4.mp4"
+    input_video_path = "input_vods/input_video1.mp4"
     video_frames = read_video(input_video_path)
 
     # Initialize the UnifiedTracker for detecting players and ball
     unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
 
     # Detect players and ball using the unified model
-    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/unified_detections.pkl")
+    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/input_video1.pkl")
     print(f"Type of detections: {type(detections)}")
     print(f"Number of frames with detections: {len(detections)}")
 
@@ -77,8 +94,9 @@ def main():
     # Initialize RallyDetector
     rally_detector = RallyDetector(mini_court)
 
-    # api_key = "YOUR GEMINI API KEY" # Replace with your actual API key
-    # commentary_generator = CommentaryGenerator(api_key)
+
+    api_key = ""    # Replace with your actual API key
+    commentary_generator = CommentaryGenerator(api_key)
 
     all_commentary = []  # Collect all commentaries
     caption_queue = deque(maxlen=3)
@@ -288,33 +306,33 @@ def main():
                 2: mini_court.video_to_court_coordinates(player_2_position, court_keypoints)
             })
 
-            # # # --- Generate simplified commentary ---
-            # shot_type_player_1 = detect_shot_type(player_1_position, ball_position, previous_point_ended)
-            # shot_type_player_2 = detect_shot_type(player_2_position, ball_position, previous_point_ended)
+            # # --- Generate simplified commentary ---
+            shot_type_player_1 = detect_shot_type(player_1_position, ball_position, previous_point_ended)
+            shot_type_player_2 = detect_shot_type(player_2_position, ball_position, previous_point_ended)
 
 
-            # # Generate commentary using the Gemini-powered generator
-            # if i % 5 == 0:  # Generate commentary every 5 frames to avoid hitting rate limits
-            #     # player_stats_dict = {player: stats.to_dict() for player, stats in player_stats.iterrows()} if player_stats is not None else {}
-            #     commentary = commentary_generator.generate_frame_commentary(
-            #         ball_hit_frames,
-            #         (shot_type_player_1, shot_type_player_2),
-            #         rally_count,
-            #         # player_stats_dict,
-            #         i
-            #     )
-            #     if commentary:
-            #         caption_queue.append([commentary, 0])
-            #         all_commentary.append(commentary)
+            # Generate commentary using the Gemini-powered generator
+            if i % 5 == 0:  # Generate commentary every 5 frames to avoid hitting rate limits
+                # player_stats_dict = {player: stats.to_dict() for player, stats in player_stats.iterrows()} if player_stats is not None else {}
+                commentary = commentary_generator.generate_frame_commentary(
+                    ball_hit_frames,
+                    (shot_type_player_1, shot_type_player_2),
+                    rally_count,
+                    # player_stats_dict,
+                    i
+                )
+                if commentary:
+                    caption_queue.append([commentary, 0])
+                    all_commentary.append(commentary)
 
-            # # Add commentary captions to the frame
-            # if caption_queue:
-            #     caption_queue[0][1] += 1  # Increment frame count for current caption
-            #     frame = add_caption_to_frame(frame, caption_queue[0][0])
+            # Add commentary captions to the frame
+            if caption_queue:
+                caption_queue[0][1] += 1  # Increment frame count for current caption
+                frame = add_caption_to_frame(frame, caption_queue[0][0])
 
-            #     # Remove caption after the duration has passed
-            #     if caption_queue[0][1] > MAX_CAPTION_DURATION:
-            #         caption_queue.popleft()
+                # Remove caption after the duration has passed
+                if caption_queue[0][1] > MAX_CAPTION_DURATION:
+                    caption_queue.popleft()
 
         else:
             print(f"Warning: Ball position not available for frame {i}")
@@ -336,7 +354,7 @@ def main():
         cv2.putText(frame, f"Frame: {i}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Save the processed video with tactical analysis and commentary
-    save_video(output_video_frames, "./output_vods/oaaa6.mp4")
+    save_video(output_video_frames, "./output_vods/op_vd1.mp4")
 
 if __name__ == "__main__":
     main()

@@ -56,16 +56,12 @@ class UnifiedTracker:
         for i, (frame, detection) in enumerate(zip(video_frames, detections)):
             players = detection['players']
 
-            if len(players) >= 2:
-                # Track players based on previous positions
-                player_1, player_2 = self.track_players(players)
-            else:
-                output_video_frames.append(frame)
-                continue
+            player_1, player_2 = self.track_players(players)
 
-            self.draw_player_bbox(frame, player_1, player_label="Player 1")
-
-            self.draw_player_bbox(frame, player_2, player_label="Player 2")
+            if player_1:
+                self.draw_player_bbox(frame, player_1, player_label="Player 1")
+            if player_2:
+                self.draw_player_bbox(frame, player_2, player_label="Player 2")
 
             # Draw ball path if interpolated positions are available
             if interpolated_positions:
@@ -87,30 +83,57 @@ class UnifiedTracker:
                     cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
     def track_players(self, players):
-        
-        # Track players across frames using Euclidean distance to previous positions.
 
         if self.previous_player_positions[0] is None or len(players) < 2:
-            # First frame: assign players based on horizontal position (left to right)
+            # First frame or not enough detections: handle carefully
             players = sorted(players, key=lambda p: p['bbox'][0])
-            self.previous_player_positions = [players[0]['bbox'], players[1]['bbox']]
-            return players[0], players[1]
-        
+            if len(players) >= 2:
+                self.previous_player_positions = [players[0]['bbox'], players[1]['bbox']]
+                return players[0], players[1]
+            elif len(players) == 1:
+                self.previous_player_positions = [players[0]['bbox'], None]
+                return players[0], None
+            else:
+                self.previous_player_positions = [None, None]
+                return None, None
+
         current_centers = [self.get_center(player['bbox']) for player in players]
+        prev_centers = [self.get_center(pos) if pos is not None else None for pos in self.previous_player_positions]
 
-        # Calculate distances between previous players and current players
-        prev_centers = [self.get_center(self.previous_player_positions[0]),
-                        self.get_center(self.previous_player_positions[1])]
+        # Calculate distances only for valid previous centers
+        valid_prev_centers = [center for center in prev_centers if center is not None]
+        if valid_prev_centers:
+            distances = distance.cdist(valid_prev_centers, current_centers, 'euclidean')
+            min_indices = distances.argmin(axis=1)
 
-        # Assign players based on minimum distance
-        distances = distance.cdist(prev_centers, current_centers, 'euclidean')
-        min_indices = distances.argmin(axis=1)
+            # Assign players based on minimum distance
+            assigned_players = [None, None]
+            for i, prev_center in enumerate(prev_centers):
+                if prev_center is not None and i < len(min_indices):
+                    assigned_players[i] = players[min_indices[i]]
 
-        # Update previous positions
-        self.previous_player_positions[0] = players[min_indices[0]]['bbox']
-        self.previous_player_positions[1] = players[min_indices[1]]['bbox']
+            # Fill in any unassigned players
+            unassigned = [p for p in players if p not in assigned_players]
+            for i in range(2):
+                if assigned_players[i] is None and unassigned:
+                    assigned_players[i] = unassigned.pop(0)
 
-        return players[min_indices[0]], players[min_indices[1]]
+            # Update previous positions
+            self.previous_player_positions = [player['bbox'] if player is not None else None for player in assigned_players]
+
+            return assigned_players[0], assigned_players[1]
+        else:
+            # If no valid previous centers, treat it as a first frame case
+            players = sorted(players, key=lambda p: p['bbox'][0])
+            if len(players) >= 2:
+                self.previous_player_positions = [players[0]['bbox'], players[1]['bbox']]
+                return players[0], players[1]
+            elif len(players) == 1:
+                self.previous_player_positions = [players[0]['bbox'], None]
+                return players[0], None
+            else:
+                self.previous_player_positions = [None, None]
+                return None, None
 
     @staticmethod
     def get_center(bbox):
