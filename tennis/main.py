@@ -80,7 +80,7 @@ def main():
 
     unified_tracker = UnifiedTracker(model_path='./models/player_and_ball_detection/best.pt')
 
-    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/test_video.pkl")
+    detections = unified_tracker.detect_frames(video_frames, read_from_stub=True, stub_path="tracker_stubs/input_video1.pkl")
     print(f"Type of detections: {type(detections)}")
     print(f"Number of frames with detections: {len(detections)}")
 
@@ -354,9 +354,8 @@ def main():
                 # If no foul, reset the foul state at the end of a valid rally
                 score_tracker.reset_foul_state()
 
-            if i < 60 or i >= total_frames - 60:
-                # Draw the score on the frame only in the first 60 or last 60 frames
-                frame = score_tracker.draw_score_on_frame(frame)
+            
+            frame = score_tracker.draw_score_on_frame(frame)
 
 
             # --- Collect player positions for stats ---
