@@ -141,6 +141,15 @@ Developed a Mini court based on actual court for better visualisations and calcu
 ### Player Stats
 Generated player stats based on movement and ball shots. 
 
+### Events that are being detected
+Ball Hit
+Shot Detection
+Rally Detection
+Four Detection
+Bouce Detection
+Score 
+
+
 ## Outputs
 You can check out output videos in the output_videos folder
 
