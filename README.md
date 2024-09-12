@@ -142,11 +142,11 @@ Developed a Mini court based on actual court for better visualisations and calcu
 Generated player stats based on movement and ball shots. 
 
 ### Events that are being detected
-Ball Hit
-Shot Detection
-Rally Detection
-Four Detection
-Bouce Detection
+Ball Hit,
+Shot Detection,
+Rally Detection,
+Foul Detection,
+Bouce Detection,
 Score 
 
 
